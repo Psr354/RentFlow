@@ -1,166 +1,217 @@
-# Sistem Manajemen Sewa Kontrakan Nenek Yuyun & TraceFund Engine
+# RentFlow: Rental Property Management & TraceFund Financial Engine
 
-Sistem manajemen kontrakan berbasis web full-stack yang dirancang untuk mengelola 11 unit (21.A sampai 21.K), mencakup otomatisasi penagihan bulanan berbasis WIB, pengingat jatuh tempo via WhatsApp Baileys dan Email SMTP, portal konfirmasi pembayaran penyewa (QRIS/Transfer/Tunai), pusat pelaporan keluhan fasilitas, serta TraceFund engine untuk pembukuan kas dua arah terpadu.
+RentFlow is an enterprise-grade, full-stack rental property management platform and dual-entry financial bookkeeping system. Designed for landlords and property managers, RentFlow automates recurring billing cycles based on local timezones (WIB/Asia-Jakarta), dispatches automated overdue payment reminders via a self-hosted WhatsApp Baileys client and SMTP email, provides dedicated public tenant portals for digital payments (QRIS, bank transfer, cash) and facility maintenance requests, and features the TraceFund ledger engine for real-time cash flow analytics.
 
 ---
 
-## 1. Arsitektur & Struktur Proyek
+## Architecture & Project Structure
 
-Proyek ini telah direstrukturisasi secara modular dengan pemisahan tanggung jawab (*separation of concerns*) yang jelas, siap untuk produksi maupun portofolio rekayasa perangkat lunak modern:
+The project follows a modular, decoupled architecture adhering to separation of concerns (SoC). It is structured for maintainability, reliability, and modern software engineering portfolio standards:
 
 ```text
-kontrakan/
-├── public/                 # Berkas statis & antarmuka frontend (Zero-build HTML5/Tailwind/JS)
-│   ├── index.html          # Dashboard utama manajemen kontrakan & analitik TraceFund
-│   ├── tagihan.html        # Portal publik invoice penyewa & upload bukti bayar
-│   └── keluhan.html        # Portal publik pengaduan kerusakan & fasilitas unit
-├── src/                    # Logika inti aplikasi backend (Node.js native ES/CommonJS)
-│   ├── app.js              # Inisialisasi HTTP server, middleware keamanan & CORS, graceful shutdown
-│   ├── config/             # Konfigurasi lingkungan & database
-│   │   ├── env.js          # Variabel lingkungan & path direktori
-│   │   └── database.js     # Inisialisasi SQLite (node:sqlite DatabaseSync), PRAGMA WAL, skema & indeks
-│   ├── routes/             # Router & dispatcher endpoint API
-│   │   └── index.js        # Pemetaan 39 rute HTTP (Auth, Unit, Tagihan, Keluhan, TraceFund, WhatsApp)
-│   ├── services/           # Layanan bisnis inti terisolasi
-│   │   ├── billing.js      # Alokasi pembayaran FIFO multi-bulan, status invoice, auto-billing
-│   │   ├── tracefund.js    # Mesin ledger kas gabungan, saldo berjalan, analitik keuangan, backup DB
-│   │   ├── whatsapp.js     # Bot Baileys mandiri, webhook WhatsApp, dan parser 12 perintah TraceFund
-│   │   └── scheduler.js    # Otomatisasi pengingat tagihan harian, cron invoice bulanan, SMTP mailer
-│   └── utils/              # Fungsi pembantu murni (reusable utilities)
-│       ├── parser.js       # Parser nominal fleksibel (k/jt/rb), kategori otomatis, format mata uang
-│       ├── security.js     # HMAC SHA-256 tokens, rate limiter, validasi magic bytes, masking privasi
-│       └── time.js         # Helper kalkulasi tanggal & jatuh tempo berbasis zona waktu WIB (Asia/Jakarta)
-├── scripts/                # Skrip pemeliharaan & migrasi
-│   └── sync_from_postgres.py # Skrip sinkronisasi data dari PostgreSQL ke SQLite lokal
-├── tests/                  # Pengujian sistem otomatis
-│   └── test_all.js         # Suite pengujian komprehensif 10 bagian (100% passing)
-├── Dockerfile              # Konfigurasi container Node.js 24 Alpine
-├── docker-compose.yml      # Orkestrasi Docker multi-environment & volume mounting
-├── server.js               # Entry-point utama aplikasi
-├── package.json            # Manifest dependensi & skrip npm
-└── README.md               # Dokumentasi teknis proyek
+RentFlow/
+├── public/                 # Static frontend assets (Zero-build HTML5, Tailwind CSS, Vanilla JS)
+│   ├── index.html          # Administrative management dashboard & TraceFund financial analytics
+│   ├── tagihan.html        # Public tenant invoice portal & proof-of-payment submission
+│   └── keluhan.html        # Public tenant maintenance & complaint submission portal
+├── src/                    # Backend application core (Node.js 24+ native SQLite)
+│   ├── app.js              # HTTP server initialization, security headers, CORS, graceful shutdown
+│   ├── config/             # Environment and persistence configurations
+│   │   ├── env.js          # Centralized environment constants and directory path resolution
+│   │   └── database.js     # SQLite (node:sqlite DatabaseSync) init, PRAGMA WAL, schema & 11 performance indexes
+│   ├── routes/             # API routing layer and request dispatcher
+│   │   └── index.js        # 39 RESTful endpoints (Auth, Units, Invoices, Complaints, TraceFund, WhatsApp)
+│   ├── services/           # Domain-driven core business services
+│   │   ├── billing.js      # FIFO multi-month payment allocation, invoice state lifecycle, auto-billing
+│   │   ├── tracefund.js    # Unified cash ledger, running balance calculation, cross-month analytics, DB backups
+│   │   ├── whatsapp.js     # Self-hosted WhatsApp Baileys socket, webhook handlers, and 12 TraceFund bot commands
+│   │   └── scheduler.js    # Automated daily invoice overdue checkers, monthly cron generators, SMTP mailer
+│   └── utils/              # Pure reusable utility functions
+│       ├── parser.js       # Flexible currency parser (k/jt/rb), automatic expense categorizer, command parser
+│       ├── security.js     # HMAC-SHA256 tokens, in-memory rate limiter, magic bytes image validation, tenant privacy masking
+│       └── time.js         # Timezone-aware date calculations and due-date logic (Asia/Jakarta / WIB)
+├── scripts/                # Database migration and operational scripts
+│   └── sync_from_postgres.py # Historical data sync script from PostgreSQL to local SQLite
+├── tests/                  # End-to-end automated test suites
+│   └── test_all.js         # Comprehensive 10-phase test runner (100% passing)
+├── Dockerfile              # Multi-stage lightweight Node.js 24 Alpine container definition
+├── docker-compose.yml      # Container orchestration with persistent volume mapping
+├── server.js               # Clean application entry point and runner
+├── package.json            # Package manifest and npm scripts
+└── README.md               # Technical project documentation
 ```
 
 ---
 
-## 2. Menjalankan dengan Docker (Rekomendasi Produksi / VPS)
+## Key Features
 
-Sistem telah dilengkapi dengan konfigurasi Docker multi-stage ringan berbasis `node:24-alpine` dengan modul bawaan `node:sqlite`.
+- **Automated Lease & Billing Lifecycle:** Automatically generates monthly rental invoices on schedule, calculates arrears, and applies FIFO (First-In, First-Out) algorithms for partial or multi-month advance payments.
+- **Self-Hosted WhatsApp Bot:** Powered by `@whiskeysockets/baileys` without recurring third-party gateway fees. Supports two-way administrative commands and automated tenant notifications.
+- **TraceFund Financial Engine:** Real-time ledger recording rental revenues, general incomes, and categorized operating expenses with running balance calculation, monthly budget threshold monitoring, and CSV exports with UTF-8 BOM.
+- **Tenant Self-Service Portals:** Clean, mobile-responsive web portals for tenants to inspect invoice details, generate QRIS payment requests, upload bank transfer receipts, submit maintenance tickets with photos, and download official receipts without requiring an account.
+- **Enterprise-Grade Security:** Cryptographically verified HMAC-SHA256 session tokens, brute-force rate limiters, strict magic bytes verification for file uploads (JPEG, PNG, WEBP), and automatic tenant personally identifiable information (PII) masking on public routes.
+- **Production-Ready Persistence:** Powered by Node.js native `node:sqlite` (`DatabaseSync`) configured with Write-Ahead Logging (WAL) and synchronous NORMAL PRAGMA, supplemented by 11 performance indexes.
 
-### A. Jalankan Aplikasi
+---
+
+## Deployment with Docker (Recommended for VPS)
+
+The application includes a production-ready Docker container based on `node:24-alpine`.
+
+### 1. Launch the Container
 ```bash
 docker compose up -d --build
 ```
-Container akan dibangun dan berjalan di latar belakang pada port host `5005` (memetakan ke port internal 5000).
+The application will build and run in the background, listening on host port `5005` (mapped to container port `5000`).
 
-### B. Memeriksa Status & Log
+### 2. Monitor Container Status & Logs
 ```bash
-# Cek status container
+# Check container status
 docker compose ps
 
-# Cek log aplikasi secara real-time
+# Tail application logs in real time
 docker compose logs -f
 ```
 
-### C. Menghentikan atau Me-restart Aplikasi
+### 3. Container Management
 ```bash
+# Restart container
 docker compose restart
+
+# Stop container
 docker compose down
 ```
 
-### D. Persistensi Data
-Seluruh data tersimpan secara persisten di folder host `./data`:
-* Database SQLite: `./data/kontrakan.db`
-* Bukti transfer & gambar QRIS: `./data/uploads/`
-* Sesi WhatsApp Baileys: `./data/wa_session/`
-* Cadangan Database: `./data/backups/`
+### 4. Data Persistence
+All application data is mounted to the host filesystem under `./data`:
+- SQLite Database: `./data/kontrakan.db`
+- Uploaded receipts & QRIS assets: `./data/uploads/`
+- WhatsApp Baileys credentials: `./data/wa_session/`
+- Automated database backups: `./data/backups/`
 
 ---
 
-## 3. Menjalankan Secara Lokal (Development)
+## Local Development
 
-### Prasyarat
-* Node.js v22.x atau v24.x (disarankan v24 LTS yang memiliki `node:sqlite` bawaan).
-* npm v10+
+### Prerequisites
+- Node.js v22.x or v24.x LTS (Node.js 24 is recommended for native `node:sqlite` support).
+- npm v10+
 
-### Instalasi & Menjalankan
+### Setup & Run
 ```bash
-# Pasang dependensi
+# Install dependencies
 npm install
 
-# Jalankan pengujian sistem (10 suite otomatis)
+# Run the 10-phase automated test suite
 npm test
 
-# Jalankan server
+# Start the server
 npm start
 ```
-Aplikasi akan aktif di `http://localhost:5000`.
+The server will be reachable at `http://localhost:5000`.
 
 ---
 
-## 4. Pengujian Sistem Otomatis (`npm test`)
+## Automated Verification & Test Suites
 
-Suite pengujian mencakup 10 area kritis:
-1. Skema Database SQLite, integritas relasi, dan kolom token akses.
-2. Helper kalkulasi tanggal & waktu berbasis Waktu Indonesia Barat (WIB).
-3. Validasi magic bytes upload gambar (JPEG/PNG/WEBP) & blokir ekstensi berbahaya (.php, .js, .svg).
-4. In-memory Rate Limiter untuk mitigasi brute force dan flooding request.
-5. Keamanan autentikasi HMAC SHA-256 dan eliminasi token bypass.
-6. Masking privasi nama dan kontak penyewa pada respon publik.
-7. Whitelist tipe berkas static uploads.
-8. Parser fleksibel TraceFund (nominal `150k`, `1.5jt`, `50rb`, deteksi kategori otomatis).
-9. Eksekusi 12 perintah bot TraceFund WhatsApp end-to-end.
-10. Kesiapan produksi (Healthcheck `/health`, Security Headers, WAL Checkpoint, & 11 indeks performa).
+Execute the comprehensive automated test suite with:
+```bash
+npm test
+```
+
+The test runner covers 10 critical operational areas:
+1. SQLite schema validation, foreign key integrity, and access token columns.
+2. WIB timezone-aware date parsing and overdue interval calculations.
+3. Magic bytes binary validation for file uploads (JPEG/PNG/WEBP) and blocking dangerous extensions (.php, .js, .svg).
+4. In-memory sliding window rate limiting across authentication and public endpoints.
+5. HMAC-SHA256 cryptographic verification and elimination of authentication bypasses.
+6. Tenant PII masking on unauthenticated public invoice endpoints.
+7. Static file serving whitelist restrictions.
+8. TraceFund currency parsing (`150k`, `1.5jt`, `50rb`) and auto-categorization heuristics.
+9. End-to-end execution of all 12 TraceFund WhatsApp administrative bot commands.
+10. Production readiness checks (Healthcheck `/health`, Security Headers, WAL Checkpoint, and indexing).
 
 ---
 
-## 5. WhatsApp Bot Mandiri & Perintah TraceFund
+## WhatsApp Bot & TraceFund Commands
 
-Sistem dilengkapi WhatsApp client mandiri berbasis Baileys (gratis tanpa langganan gateway pihak ketiga).
+The system features an autonomous WhatsApp client. Once authenticated by scanning the QR code in **Settings > WhatsApp Bot**, the registered landlord phone number can execute administrative commands:
 
-### A. Cara Menghubungkan
-1. Buka dashboard web > menu **Pengaturan & Notifikasi**.
-2. Pada bagian **WhatsApp Bot Mandiri**, pindai (*scan*) kode QR menggunakan WhatsApp di ponsel Anda (**Setelan** > **Perangkat Tertaut** > **Tautkan Perangkat**).
-3. Status akan berubah menjadi **Terhubung (Online)**.
-
-### B. Daftar Perintah Chat WhatsApp Pemilik
-
-| Perintah | Deskripsi | Contoh Penggunaan |
+| Command | Description | Example Usage |
 | :--- | :--- | :--- |
-| `#keluar` | Catat pengeluaran kas dengan nominal fleksibel & kategori otomatis | `#keluar 150k Listrik Beli token pompa air` |
-| `#masuk` | Catat pemasukan non-sewa (penjualan barang bekas, denda, dsb) | `#masuk 500k Penjualan kardus bekas` |
-| `#saldo` | Cek saldo kas berjalan, total masuk, dan total keluar bulan ini | `#saldo` |
-| `#budget` | Tampilkan atau atur batas anggaran belanja bulanan | `#budget 5jt` atau `#budget` |
-| `#kategori` | Tampilkan rincian pengeluaran per kategori bulan ini | `#kategori` |
-| `#ringkasan` | Ringkasan laba bersih dan kas bulan berjalan | `#ringkasan` |
-| `#tahunan` | Laporan rekapitulasi laba dan arus kas 12 bulan terakhir | `#tahunan` |
-| `#analisis` | Analitik pola keuangan lintas bulan | `#analisis` |
-| `#total` | Hitung akumulasi belanja berdasarkan kata kunci tertentu | `#total token` |
-| `#riwayat` | Tampilkan 5 transaksi kas terakhir | `#riwayat` |
-| `#ekspor` / `#csv` | Kirim dokumen spreadsheet CSV laporan transaksi | `#ekspor` |
-| `#batal` | Batalkan / hapus transaksi pengeluaran kas terakhir | `#batal` |
-| `#status` / `#cek` | Periksa status okupansi unit kontrakan & daftar penunggak | `#status` |
-| `#lunas` | Tandai pelunasan tagihan unit kontrakan via chat | `#lunas 21.A` |
-| `#keluhan` | Lihat daftar keluhan fasilitas yang belum selesai diperbaiki | `#keluhan` |
-| `#bantuan` | Tampilkan petunjuk lengkap seluruh perintah bot | `#bantuan` |
+| `#keluar` | Record operational expense with flexible nominal & auto-categorization | `#keluar 150k Listrik Beli token pompa air` |
+| `#masuk` | Record non-rental income (e.g. recycling, penalties, deposits) | `#masuk 500k Penjualan kardus bekas` |
+| `#saldo` | Display real-time cash balance, total incoming, and total outgoing | `#saldo` |
+| `#budget` | View or configure monthly expenditure threshold | `#budget 5jt` or `#budget` |
+| `#kategori` | Breakdown of current month expenses grouped by category | `#kategori` |
+| `#ringkasan` | Financial summary and net profit for the active month | `#ringkasan` |
+| `#tahunan` | 12-month annual cash flow and profit recap | `#tahunan` |
+| `#analisis` | Cross-month comparative financial trend analysis | `#analisis` |
+| `#total` | Sum total expenditures matching a specific search keyword | `#total token` |
+| `#riwayat` | Display the 5 most recent cash ledger transactions | `#riwayat` |
+| `#ekspor` / `#csv` | Generate and receive CSV spreadsheet report directly in chat | `#ekspor` |
+| `#batal` | Rollback / delete the most recent recorded expense transaction | `#batal` |
+| `#status` / `#cek` | Check room occupancy status and list overdue tenants | `#status` |
+| `#lunas` | Mark an invoice as fully paid via chat | `#lunas 21.A` |
+| `#keluhan` | List outstanding tenant facility maintenance tickets | `#keluhan` |
+| `#bantuan` | Display interactive command help menu | `#bantuan` |
 
 ---
 
-## 6. Portal Publik Penghuni
+## Public Tenant Portals
 
-Aplikasi menyediakan antarmuka web publik ramah perangkat seluler (*mobile-responsive*):
-1. **Portal Tagihan & Pembayaran Sewa:**  
-   `http://domain-anda.com/tagihan.html?id=INV-XXXXX`  
-   Penyewa dapat melihat detail sewa, batas jatuh tempo, QRIS interaktif, rekening transfer bank, konfirmasi rencana bayar tunai, mengunggah bukti bayar, dan mengunduh kuitansi resmi saat lunas.
-2. **Pusat Pengaduan Keluhan & Perbaikan Fasilitas:**  
-   `http://domain-anda.com/keluhan.html`  
-   Penyewa dapat melaporkan masalah fasilitas (pompa air, atap, listrik, kunci) beserta unggahan foto bukti kerusakan tanpa perlu login.
+Tenants do not require administrative accounts to interact with the system:
+1. **Invoice & Digital Payment Portal:**  
+   `http://your-domain.com/tagihan.html?id=INV-XXXXX&token=XXXX`  
+   Tenants can review rent details, inspect due dates, pay via interactive QRIS or bank transfer, notify intent for cash payments, upload payment proof, and download official receipts once verified.
+2. **Facility Maintenance Portal:**  
+   `http://your-domain.com/keluhan.html`  
+   Tenants can submit maintenance requests (water pump, electrical, roofing, plumbing) accompanied by description notes and photo attachments.
 
 ---
 
-## 7. Kredensial Masuk Bawaan (Default Login)
+## Nginx Reverse Proxy & SSL Setup (Production)
 
-* **Username:** `admin`
-* **Password:** `nekyuyun2026`
+To route a domain name with SSL certificates to the Docker service:
 
-Untuk mengganti username dan password, sesuaikan variabel `APP_USER` dan `APP_PASS` pada berkas `.env` atau `docker-compose.yml`.
+```nginx
+server {
+    server_name your-domain.com www.your-domain.com;
+    client_max_body_size 25M;
+
+    location / {
+        proxy_pass http://127.0.0.1:5005;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+Issue a free Let's Encrypt SSL certificate:
+```bash
+sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+```
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `NODE_ENV` | `production` | Node environment runtime mode |
+| `PORT` | `5000` | Internal server HTTP port |
+| `HOST` | `0.0.0.0` | Network binding interface |
+| `APP_USER` | `admin` | Administrative dashboard login username |
+| `APP_PASS` | `nekyuyun2026` | Administrative dashboard login password |
+| `DATA_DIR` | `./data` | Directory path for persistent database and file storage |
+| `BASE_URL` | `http://localhost:5005` | Canonical base URL used for email and WhatsApp invoice links |
+
+---
+
+## License
+
+This project is licensed under the ISC License.
