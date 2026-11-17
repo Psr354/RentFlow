@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layanan Keluhan & Perbaikan Fasilitas - Kontrakan Nenek Yuyun</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .category-chip.active {
+            border-color: #6366f1;
+            background-color: #eef2ff;
+            color: #4338ca;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen py-8 px-4 flex flex-col justify-between">
+
+    <div class="max-w-md mx-auto w-full space-y-6">
+
+        <!-- Header Brand -->
+        <div class="text-center space-y-2">
+            <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 mb-1">
+                <i data-lucide="wrench" class="w-7 h-7"></i>
+            </div>
+            <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">Layanan Keluhan & Perbaikan</h1>
+            <p class="text-xs text-slate-500 font-medium">Kontrakan Nenek Yuyun (21.A - 21.K)</p>
+        </div>
+
+        <!-- Box Form Keluhan -->
+        <div class="bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden p-6 sm:p-7 space-y-5">
+            <div id="form-container" class="space-y-5">
+                <div class="border-b border-slate-100 pb-3">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <i data-lucide="clipboard-pen" class="w-4 h-4 text-indigo-600"></i> Form Laporan Kendala Fasilitas
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1">Laporkan kendala fasilitas unit kontrakan agar dapat segera dikoordinasikan perbaikannya.</p>
+                </div>
+
+                <form id="complaint-form" onsubmit="submitComplaint(event)" class="space-y-4">
+                    <!-- Unit Selection -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Unit Kontrakan *</label>
+                        <select id="form-unit" required class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                            <option value="">-- Memuat daftar unit... --</option>
+                        </select>
+                    </div>
+
+                    <!-- Nama Penghuni -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Nama Penghuni / Pelapor *</label>
+                        <input type="text" id="form-name" required placeholder="Nama lengkap Anda" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                    </div>
+
+                    <!-- No WhatsApp -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Nomor WhatsApp Aktif (Opsional)</label>
+                        <input type="tel" id="form-phone" placeholder="Contoh: 081234567890" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                        <p class="text-[11px] text-slate-400 mt-1">Digunakan untuk konfirmasi jadwal kunjungan teknisi atau tukang.</p>
+                    </div>
+
+                    <!-- Kategori Keluhan - Visual Chip Selector -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-2">Kategori Kendala *</label>
+                        <input type="hidden" id="form-category" value="Air & Pompa">
+                        <div class="grid grid-cols-2 gap-2 text-xs" id="category-chips-container">
+                            <button type="button" onclick="selectCategory('Air & Pompa')" class="category-chip active p-2.5 border border-slate-200 rounded-xl flex items-center gap-2 text-left font-medium transition hover:border-indigo-300">
+                                <i data-lucide="droplets" class="w-4 h-4 text-sky-500 flex-shrink-0"></i>
+                                <span class="text-[11px] leading-tight">Air & Pompa</span>
+                            </button>
+                            <button type="button" onclick="selectCategory('Listrik & MCB')" class="category-chip p-2.5 border border-slate-200 rounded-xl flex items-center gap-2 text-left font-medium text-slate-700 transition hover:border-indigo-300">
+                                <i data-lucide="zap" class="w-4 h-4 text-amber-500 flex-shrink-0"></i>
+                                <span class="text-[11px] leading-tight">Listrik & MCB</span>
+                            </button>
+                            <button type="button" onclick="selectCategory('Atap & Bocor')" class="category-chip p-2.5 border border-slate-200 rounded-xl flex items-center gap-2 text-left font-medium text-slate-700 transition hover:border-indigo-300">
+                                <i data-lucide="umbrella" class="w-4 h-4 text-indigo-500 flex-shrink-0"></i>
+                                <span class="text-[11px] leading-tight">Atap & Bocor</span>
+                            </button>
+                            <button type="button" onclick="selectCategory('Pintu & Kunci')" class="category-chip p-2.5 border border-slate-200 rounded-xl flex items-center gap-2 text-left font-medium text-slate-700 transition hover:border-indigo-300">
+                                <i data-lucide="key" class="w-4 h-4 text-slate-600 flex-shrink-0"></i>
+                                <span class="text-[11px] leading-tight">Pintu & Kunci</span>
+                            </button>
+                            <button type="button" onclick="selectCategory('Saluran & Got')" class="category-chip p-2.5 border border-slate-200 rounded-xl flex items-center gap-2 text-left font-medium text-slate-700 transition hover:border-indigo-300">
+                                <i data-lucide="waves" class="w-4 h-4 text-teal-500 flex-shrink-0"></i>
+                                <span class="text-[11px] leading-tight">Saluran & Got</span>
+                            </button>
+                            <button type="button" onclick="selectCategory('Kebersihan')" class="category-chip p-2.5 border border-slate-200 rounded-xl flex items-center gap-2 text-left font-medium text-slate-700 transition hover:border-indigo-300">
+                                <i data-lucide="trash-2" class="w-4 h-4 text-emerald-500 flex-shrink-0"></i>
+                                <span class="text-[11px] leading-tight">Kebersihan</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Deskripsi Keluhan -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Rincian Kendala / Kerusakan *</label>
+                        <textarea id="form-desc" required rows="3" placeholder="Jelaskan kendala secara singkat dan jelas..." class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-normal focus:outline-none focus:ring-2 focus:ring-indigo-500 transition resize-none"></textarea>
+                    </div>
+
+                    <!-- Upload Foto Bukti Kerusakan -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Foto Bukti Kerusakan (Opsional)</label>
+                        <div class="border-2 border-dashed border-slate-300 rounded-2xl p-4 text-center hover:bg-slate-50 transition cursor-pointer relative" onclick="document.getElementById('form-photo').click()">
+                            <input type="file" id="form-photo" accept="image/*" class="hidden" onchange="handlePhotoSelect(event)">
+                            <div id="photo-placeholder" class="space-y-1.5 py-1">
+                                <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 mx-auto flex items-center justify-center">
+                                    <i data-lucide="camera" class="w-5 h-5"></i>
+                                </div>
+                                <p class="text-xs font-bold text-slate-700">Ambil Foto atau Pilih Gambar</p>
+                                <p class="text-[11px] text-slate-400">Format JPG, PNG (Maksimal 5 MB)</p>
+                            </div>
+                            <div id="photo-preview-box" class="hidden relative">
+                                <img id="photo-preview-img" src="" alt="Pratinjau" class="max-h-48 mx-auto rounded-xl border border-slate-200 object-cover shadow-sm">
+                                <div class="mt-2 flex items-center justify-center gap-2">
+                                    <button type="button" onclick="removePhoto(event)" class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg text-xs border border-rose-200 flex items-center gap-1 transition">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Foto
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tombol Submit -->
+                    <button type="submit" id="btn-submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl text-xs shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition">
+                        <i data-lucide="send" class="w-4 h-4"></i> Kirim Laporan Keluhan
+                    </button>
+                </form>
+            </div>
+
+            <!-- Tampilan Berhasil Dikirim -->
+            <div id="success-container" class="hidden text-center py-6 space-y-4">
+                <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto shadow-md shadow-emerald-500/10">
+                    <i data-lucide="check-circle-2" class="w-8 h-8"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-extrabold text-slate-900">Laporan Berhasil Terkirim</h3>
+                    <p class="text-xs text-slate-600 mt-1 max-w-xs mx-auto leading-relaxed">
+                        Laporan keluhan perbaikan fasilitas telah tersimpan dan diteruskan langsung ke pemilik kontrakan untuk segera ditindaklanjuti.
+                    </p>
+                </div>
+
+                <div id="report-summary-card" class="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left text-xs space-y-1.5 text-slate-700">
+                    <p><span class="text-slate-400">Unit:</span> <strong id="summary-unit">-</strong></p>
+                    <p><span class="text-slate-400">Pelapor:</span> <strong id="summary-name">-</strong></p>
+                    <p><span class="text-slate-400">Kategori:</span> <strong id="summary-category">-</strong></p>
+                </div>
+
+                <div class="pt-2 flex flex-col gap-2">
+                    <a id="btn-wa-confirm" href="#" target="_blank" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition">
+                        <i data-lucide="phone" class="w-4 h-4"></i> Konfirmasi ke WhatsApp Pemilik
+                    </a>
+                    <button type="button" onclick="resetForm()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Kirim Laporan Lain
+                    </button>
+                    <a id="btn-back-invoice" href="/" class="w-full py-2 bg-transparent text-slate-500 hover:text-slate-800 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5">
+                        <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Kembali ke Halaman Utama
+                    </a>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer Kontak Pemilik -->
+        <div class="text-center space-y-1">
+            <p class="text-[11px] text-slate-400">Butuh penanganan darurat segera?</p>
+            <a id="btn-wa-emergency" href="#" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-bold hover:underline">
+                <i data-lucide="phone" class="w-3.5 h-3.5"></i> Hubungi Pemilik Langsung via WhatsApp
+            </a>
+        </div>
+
+    </div>
+
+    <script>
+        let selectedBase64Photo = '';
+        let roomsList = [];
+        let ownerPhone = '';
+
+        function getQueryParam(name) {
+            const url = new URL(window.location.href);
+            return url.searchParams.get(name);
+        }
+
+        function selectCategory(cat) {
+            document.getElementById('form-category').value = cat;
+            const chips = document.querySelectorAll('.category-chip');
+            chips.forEach(chip => {
+                if (chip.textContent.trim() === cat) {
+                    chip.classList.add('active');
+                } else {
+                    chip.classList.remove('active');
+                }
+            });
+        }
+
+        async function initPage() {
+            lucide.createIcons();
+            const unitParam = getQueryParam('unit');
+            const invParam = getQueryParam('inv');
+
+            if (invParam) {
+                const backBtn = document.getElementById('btn-back-invoice');
+                if (backBtn) {
+                    backBtn.href = `/tagihan.html?id=${encodeURIComponent(invParam)}`;
+                    backBtn.innerHTML = `<i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Kembali ke Tagihan Sewa`;
+                }
+            }
+
+            try {
+                const res = await fetch('/api/public/complaints');
+                const d = await res.json();
+                if (res.ok && d.rooms) {
+                    roomsList = d.rooms;
+                    if (d.settings && d.settings.owner_phone) {
+                        ownerPhone = d.settings.owner_phone;
+                        const cleanPhone = ownerPhone.replace(/[^0-9]/g, '');
+                        const waPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
+                        const emergEl = document.getElementById('btn-wa-emergency');
+                        if (emergEl) {
+                            emergEl.href = `https://wa.me/${waPhone}?text=${encodeURIComponent('Halo Pemilik Kontrakan, ada kendala darurat di unit saya.')}`;
+                        }
+                    }
+
+                    const sel = document.getElementById('form-unit');
+                    sel.innerHTML = '<option value="">-- Pilih Nomor Unit --</option>' + 
+                        d.rooms.map(r => `<option value="${r.id}">Unit ${r.number}</option>`).join('');
+
+                    if (unitParam) {
+                        const match = d.rooms.find(r => r.number.toLowerCase() === unitParam.toLowerCase() || r.id === unitParam);
+                        if (match) {
+                            sel.value = match.id;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Gagal memuat unit:', err);
+            }
+        }
+
+        function handlePhotoSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Ukuran foto maksimal 5 MB.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                selectedBase64Photo = evt.target.result;
+                document.getElementById('photo-preview-img').src = selectedBase64Photo;
+                document.getElementById('photo-placeholder').classList.add('hidden');
+                document.getElementById('photo-preview-box').classList.remove('hidden');
+                lucide.createIcons();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removePhoto(e) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            selectedBase64Photo = '';
+            document.getElementById('form-photo').value = '';
+            document.getElementById('photo-preview-img').src = '';
+            document.getElementById('photo-preview-box').classList.add('hidden');
+            document.getElementById('photo-placeholder').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        async function submitComplaint(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-submit');
+            btn.disabled = true;
+            btn.innerHTML = `<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Mengirim...`;
+
+            const unitSelect = document.getElementById('form-unit');
+            const selectedOpt = unitSelect.selectedOptions[0];
+            const unitNumber = selectedOpt ? (selectedOpt.getAttribute('data-number') || selectedOpt.text) : '';
+            const tenantName = document.getElementById('form-name').value.trim();
+            const category = document.getElementById('form-category').value;
+            const description = document.getElementById('form-desc').value.trim();
+
+            const payload = {
+                room_id: unitSelect.value,
+                tenant_name: tenantName,
+                tenant_phone: document.getElementById('form-phone').value.trim(),
+                category: category,
+                description: description,
+                photo_image: selectedBase64Photo || null
+            };
+
+            try {
+                const res = await fetch('/api/public/complaints', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const d = await res.json();
+                if (res.ok && d.success) {
+                    document.getElementById('form-container').classList.add('hidden');
+                    document.getElementById('success-container').classList.remove('hidden');
+
+                    document.getElementById('summary-unit').textContent = unitNumber;
+                    document.getElementById('summary-name').textContent = tenantName;
+                    document.getElementById('summary-category').textContent = category;
+
+                    const waMsg = encodeURIComponent(
+                        `Halo Pemilik Kontrakan,\n` +
+                        `Saya sudah mengirim laporan kendala fasilitas:\n` +
+                        `- Unit: ${unitNumber}\n` +
+                        `- Pelapor: ${tenantName}\n` +
+                        `- Kategori: ${category}\n` +
+                        `- Rincian: ${description}\n\n` +
+                        `Mohon bantuannya untuk koordinasi perbaikan. Terima kasih.`
+                    );
+                    const waBtn = document.getElementById('btn-wa-confirm');
+                    if (waBtn) {
+                        const cleanPhone = (ownerPhone || '').replace(/[^0-9]/g, '');
+                        const waPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
+                        waBtn.href = waPhone ? `https://wa.me/${waPhone}?text=${waMsg}` : `https://api.whatsapp.com/send?text=${waMsg}`;
+                    }
+
+                    lucide.createIcons();
+                } else {
+                    alert(d.message || 'Gagal mengirim keluhan.');
+                }
+            } catch (err) {
+                alert('Terjadi kesalahan jaringan: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i data-lucide="send" class="w-4 h-4"></i> Kirim Laporan Keluhan`;
+                lucide.createIcons();
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('complaint-form').reset();
+            removePhoto();
+            selectCategory('Air & Pompa');
+            document.getElementById('form-container').classList.remove('hidden');
+            document.getElementById('success-container').classList.add('hidden');
+        }
+
+        window.onload = initPage;
+    </script>
+</body>
+</html>

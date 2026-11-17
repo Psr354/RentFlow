@@ -1,0 +1,28 @@
+# Node dependencies
+node_modules/
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# SQLite Databases & WAL journal files
+*.db
+*.db-shm
+*.db-wal
+data/
+backups/
+
+# WhatsApp Baileys credentials & multi-file auth
+wa_session/
+
+# Uploaded tenant payment receipts & media
+uploads/
+
+# Logs and runtime files
+*.log
+npm-debug.log*
+
+# System files
+.DS_Store
+Thumbs.db

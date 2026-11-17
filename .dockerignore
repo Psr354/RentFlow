@@ -1,0 +1,10 @@
+node_modules
+data
+kontrakan.db
+kontrakan.db-wal
+kontrakan.db-shm
+kontrakan.db-journal
+uploads
+.git
+.gitignore
+npm-debug.log

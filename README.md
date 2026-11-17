@@ -1,21 +1,57 @@
-# Sistem Manajemen Sewa Kontrakan Nenek Yuyun
+# Sistem Manajemen Sewa Kontrakan Nenek Yuyun & TraceFund Engine
 
-Sistem manajemen kontrakan berbasis web yang dirancang untuk mengelola 11 unit (21.A sampai 21.K), mencakup otomatisasi penagihan bulanan, pengingat jatuh tempo via WhatsApp dan Email, portal konfirmasi pembayaran penyewa (QRIS/Transfer/Tunai), serta dashboard analitik keuangan.
+Sistem manajemen kontrakan berbasis web full-stack yang dirancang untuk mengelola 11 unit (21.A sampai 21.K), mencakup otomatisasi penagihan bulanan berbasis WIB, pengingat jatuh tempo via WhatsApp Baileys dan Email SMTP, portal konfirmasi pembayaran penyewa (QRIS/Transfer/Tunai), pusat pelaporan keluhan fasilitas, serta TraceFund engine untuk pembukuan kas dua arah terpadu.
 
 ---
 
-## 1. Menjalankan dengan Docker (Rekomendasi untuk VPS)
+## 1. Arsitektur & Struktur Proyek
 
-Sistem sudah dilengkapi dengan konfigurasi Docker lengkap sehingga Anda tidak perlu memasang Node.js secara manual di VPS.
+Proyek ini telah direstrukturisasi secara modular dengan pemisahan tanggung jawab (*separation of concerns*) yang jelas, siap untuk produksi maupun portofolio rekayasa perangkat lunak modern:
+
+```text
+kontrakan/
+├── public/                 # Berkas statis & antarmuka frontend (Zero-build HTML5/Tailwind/JS)
+│   ├── index.html          # Dashboard utama manajemen kontrakan & analitik TraceFund
+│   ├── tagihan.html        # Portal publik invoice penyewa & upload bukti bayar
+│   └── keluhan.html        # Portal publik pengaduan kerusakan & fasilitas unit
+├── src/                    # Logika inti aplikasi backend (Node.js native ES/CommonJS)
+│   ├── app.js              # Inisialisasi HTTP server, middleware keamanan & CORS, graceful shutdown
+│   ├── config/             # Konfigurasi lingkungan & database
+│   │   ├── env.js          # Variabel lingkungan & path direktori
+│   │   └── database.js     # Inisialisasi SQLite (node:sqlite DatabaseSync), PRAGMA WAL, skema & indeks
+│   ├── routes/             # Router & dispatcher endpoint API
+│   │   └── index.js        # Pemetaan 39 rute HTTP (Auth, Unit, Tagihan, Keluhan, TraceFund, WhatsApp)
+│   ├── services/           # Layanan bisnis inti terisolasi
+│   │   ├── billing.js      # Alokasi pembayaran FIFO multi-bulan, status invoice, auto-billing
+│   │   ├── tracefund.js    # Mesin ledger kas gabungan, saldo berjalan, analitik keuangan, backup DB
+│   │   ├── whatsapp.js     # Bot Baileys mandiri, webhook WhatsApp, dan parser 12 perintah TraceFund
+│   │   └── scheduler.js    # Otomatisasi pengingat tagihan harian, cron invoice bulanan, SMTP mailer
+│   └── utils/              # Fungsi pembantu murni (reusable utilities)
+│       ├── parser.js       # Parser nominal fleksibel (k/jt/rb), kategori otomatis, format mata uang
+│       ├── security.js     # HMAC SHA-256 tokens, rate limiter, validasi magic bytes, masking privasi
+│       └── time.js         # Helper kalkulasi tanggal & jatuh tempo berbasis zona waktu WIB (Asia/Jakarta)
+├── scripts/                # Skrip pemeliharaan & migrasi
+│   └── sync_from_postgres.py # Skrip sinkronisasi data dari PostgreSQL ke SQLite lokal
+├── tests/                  # Pengujian sistem otomatis
+│   └── test_all.js         # Suite pengujian komprehensif 10 bagian (100% passing)
+├── Dockerfile              # Konfigurasi container Node.js 24 Alpine
+├── docker-compose.yml      # Orkestrasi Docker multi-environment & volume mounting
+├── server.js               # Entry-point utama aplikasi
+├── package.json            # Manifest dependensi & skrip npm
+└── README.md               # Dokumentasi teknis proyek
+```
+
+---
+
+## 2. Menjalankan dengan Docker (Rekomendasi Produksi / VPS)
+
+Sistem telah dilengkapi dengan konfigurasi Docker multi-stage ringan berbasis `node:24-alpine` dengan modul bawaan `node:sqlite`.
 
 ### A. Jalankan Aplikasi
-Masuk ke direktori proyek di VPS dan jalankan perintah:
-
 ```bash
 docker compose up -d --build
 ```
-
-Container akan otomatis dibangun dan berjalan di latar belakang pada port host `5005` (memetakan ke port internal 5000).
+Container akan dibangun dan berjalan di latar belakang pada port host `5005` (memetakan ke port internal 5000).
 
 ### B. Memeriksa Status & Log
 ```bash
@@ -28,10 +64,7 @@ docker compose logs -f
 
 ### C. Menghentikan atau Me-restart Aplikasi
 ```bash
-# Restart container
 docker compose restart
-
-# Menghentikan container
 docker compose down
 ```
 
@@ -39,115 +72,95 @@ docker compose down
 Seluruh data tersimpan secara persisten di folder host `./data`:
 * Database SQLite: `./data/kontrakan.db`
 * Bukti transfer & gambar QRIS: `./data/uploads/`
-
-Data tidak akan hilang saat container di-restart, diperbarui, atau dibangun ulang.
+* Sesi WhatsApp Baileys: `./data/wa_session/`
+* Cadangan Database: `./data/backups/`
 
 ---
 
-## 2. Menghubungkan Domain ke Docker (Nginx Reverse Proxy & SSL)
+## 3. Menjalankan Secara Lokal (Development)
 
-Jika Anda ingin mengakses aplikasi menggunakan domain Anda (misal: `https://domain-anda.com`), pasang reverse proxy Nginx di VPS:
+### Prasyarat
+* Node.js v22.x atau v24.x (disarankan v24 LTS yang memiliki `node:sqlite` bawaan).
+* npm v10+
 
-### A. Buat Konfigurasi Nginx
-Buat berkas `/etc/nginx/sites-available/kontrakan`:
-
-```nginx
-server {
-    server_name domain-anda.com www.domain-anda.com;
-
-    client_max_body_size 25M;
-
-    location / {
-        proxy_pass http://127.0.0.1:5005;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-Aktifkan konfigurasi:
+### Instalasi & Menjalankan
 ```bash
-sudo ln -s /etc/nginx/sites-available/kontrakan /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
+# Pasang dependensi
+npm install
 
-### B. Pasang Sertifikat SSL Gratis (HTTPS)
-```bash
-sudo certbot --nginx -d domain-anda.com -d www.domain-anda.com
-```
+# Jalankan pengujian sistem (10 suite otomatis)
+npm test
 
-Setelah HTTPS aktif, buka menu **Pengaturan** di dashboard admin dan ubah **URL Domain / Host VPS** menjadi `https://domain-anda.com`.
+# Jalankan server
+npm start
+```
+Aplikasi akan aktif di `http://localhost:5000`.
 
 ---
 
-## 3. Akun Masuk Bawaan (Default Login)
+## 4. Pengujian Sistem Otomatis (`npm test`)
 
-* **Username:** `admin`
-* **Password:** `nekyuyun2026`
-
-Untuk mengganti username dan password, ubah variabel `APP_USER` dan `APP_PASS` pada berkas `docker-compose.yml`.
+Suite pengujian mencakup 10 area kritis:
+1. Skema Database SQLite, integritas relasi, dan kolom token akses.
+2. Helper kalkulasi tanggal & waktu berbasis Waktu Indonesia Barat (WIB).
+3. Validasi magic bytes upload gambar (JPEG/PNG/WEBP) & blokir ekstensi berbahaya (.php, .js, .svg).
+4. In-memory Rate Limiter untuk mitigasi brute force dan flooding request.
+5. Keamanan autentikasi HMAC SHA-256 dan eliminasi token bypass.
+6. Masking privasi nama dan kontak penyewa pada respon publik.
+7. Whitelist tipe berkas static uploads.
+8. Parser fleksibel TraceFund (nominal `150k`, `1.5jt`, `50rb`, deteksi kategori otomatis).
+9. Eksekusi 12 perintah bot TraceFund WhatsApp end-to-end.
+10. Kesiapan produksi (Healthcheck `/health`, Security Headers, WAL Checkpoint, & 11 indeks performa).
 
 ---
 
-## 5. WhatsApp Bot Mandiri (100% Gratis & Dua Arah)
+## 5. WhatsApp Bot Mandiri & Perintah TraceFund
 
-Sistem sudah dilengkapi WhatsApp client mandiri berbasis Baileys, sehingga Anda tidak memerlukan langganan gateway pihak ketiga berbayar.
+Sistem dilengkapi WhatsApp client mandiri berbasis Baileys (gratis tanpa langganan gateway pihak ketiga).
 
-### A. Cara Menghubungkan:
+### A. Cara Menghubungkan
 1. Buka dashboard web > menu **Pengaturan & Notifikasi**.
-2. Pada bagian **WhatsApp Bot Mandiri**, pindai (scan) kode QR menggunakan WhatsApp di ponsel Anda:
-   * Buka WhatsApp > **Setelan** > **Perangkat Tertaut** > **Tautkan Perangkat**.
-3. Status akan berubah menjadi **Terhubung (Online)**. Sesi login akan tersimpan otomatis di `./data/wa_session`.
+2. Pada bagian **WhatsApp Bot Mandiri**, pindai (*scan*) kode QR menggunakan WhatsApp di ponsel Anda (**Setelan** > **Perangkat Tertaut** > **Tautkan Perangkat**).
+3. Status akan berubah menjadi **Terhubung (Online)**.
 
-### B. Perintah Chat WhatsApp dari Nomor Pemilik:
-Hanya nomor yang terdaftar di kolom **Nomor WhatsApp Pemilik** yang dapat menjalankan perintah bot:
+### B. Daftar Perintah Chat WhatsApp Pemilik
 
-1. **Catat Pengeluaran Otomatis:**
-   ```text
-   #keluar [Kategori] [Nominal] [Keterangan]
-   ```
-   *Contoh:* `#keluar Listrik 150000 Beli token pompa air`  
-   *Kategori yang didukung:* `Listrik`, `Air`, `Kebersihan`, `Perbaikan`, `Lainnya`.  
-   Bot akan membalas rincian pengeluaran dan total pengeluaran bulan ini.
-
-2. **Cek Status Kontrakan:**
-   ```text
-   #status
-   #cek
-   ```
-   Bot akan membalas okupansi unit (terisi/kosong) dan daftar unit yang belum lunas/nunggak.
-
-3. **Tandai Lunas via Chat:**
-   ```text
-   #lunas [Nama Unit]
-   ```
-   *Contoh:* `#lunas 21.A`
-
-4. **Cek Laporan Keluhan Penghuni:**
-   ```text
-   #keluhan
-   ```
-   Bot akan membalas daftar laporan kerusakan / keluhan fasilitas yang belum terselesaikan.
-
-5. **Notifikasi Otomatis ke Pemilik:**
-   * Saat penyewa mengunggah bukti transfer atau memilih rencana bayar tunai, bot otomatis mengirim pesan konfirmasi ke WhatsApp pemilik.
-   * Saat penyewa mengirim laporan keluhan kerusakan unit, bot otomatis mengirim rincian laporan ke WhatsApp pemilik.
+| Perintah | Deskripsi | Contoh Penggunaan |
+| :--- | :--- | :--- |
+| `#keluar` | Catat pengeluaran kas dengan nominal fleksibel & kategori otomatis | `#keluar 150k Listrik Beli token pompa air` |
+| `#masuk` | Catat pemasukan non-sewa (penjualan barang bekas, denda, dsb) | `#masuk 500k Penjualan kardus bekas` |
+| `#saldo` | Cek saldo kas berjalan, total masuk, dan total keluar bulan ini | `#saldo` |
+| `#budget` | Tampilkan atau atur batas anggaran belanja bulanan | `#budget 5jt` atau `#budget` |
+| `#kategori` | Tampilkan rincian pengeluaran per kategori bulan ini | `#kategori` |
+| `#ringkasan` | Ringkasan laba bersih dan kas bulan berjalan | `#ringkasan` |
+| `#tahunan` | Laporan rekapitulasi laba dan arus kas 12 bulan terakhir | `#tahunan` |
+| `#analisis` | Analitik pola keuangan lintas bulan | `#analisis` |
+| `#total` | Hitung akumulasi belanja berdasarkan kata kunci tertentu | `#total token` |
+| `#riwayat` | Tampilkan 5 transaksi kas terakhir | `#riwayat` |
+| `#ekspor` / `#csv` | Kirim dokumen spreadsheet CSV laporan transaksi | `#ekspor` |
+| `#batal` | Batalkan / hapus transaksi pengeluaran kas terakhir | `#batal` |
+| `#status` / `#cek` | Periksa status okupansi unit kontrakan & daftar penunggak | `#status` |
+| `#lunas` | Tandai pelunasan tagihan unit kontrakan via chat | `#lunas 21.A` |
+| `#keluhan` | Lihat daftar keluhan fasilitas yang belum selesai diperbaiki | `#keluhan` |
+| `#bantuan` | Tampilkan petunjuk lengkap seluruh perintah bot | `#bantuan` |
 
 ---
 
 ## 6. Portal Publik Penghuni
 
-Aplikasi menyediakan halaman web publik ramah ponsel tanpa perlu login bagi penyewa:
-1. **Portal Tagihan & Bayar Sewa:**
-   `https://domain-anda.com/tagihan.html?id=INV-XXXXX`
-   Penyewa dapat melihat detail sewa, batas tempo, transfer ke rekening/QRIS, konfirmasi bayar tunai, dan mengunduh kuitansi PDF resmi saat lunas.
-2. **Pusat Keluhan & Perbaikan Unit:**
-   `https://domain-anda.com/keluhan.html`
-   Penyewa dapat melaporkan kerusakan fasilitas (air, atap bocor, listrik, kunci pintu, dsb) disertai deskripsi dan foto bukti kerusakan.
+Aplikasi menyediakan antarmuka web publik ramah perangkat seluler (*mobile-responsive*):
+1. **Portal Tagihan & Pembayaran Sewa:**  
+   `http://domain-anda.com/tagihan.html?id=INV-XXXXX`  
+   Penyewa dapat melihat detail sewa, batas jatuh tempo, QRIS interaktif, rekening transfer bank, konfirmasi rencana bayar tunai, mengunggah bukti bayar, dan mengunduh kuitansi resmi saat lunas.
+2. **Pusat Pengaduan Keluhan & Perbaikan Fasilitas:**  
+   `http://domain-anda.com/keluhan.html`  
+   Penyewa dapat melaporkan masalah fasilitas (pompa air, atap, listrik, kunci) beserta unggahan foto bukti kerusakan tanpa perlu login.
 
+---
+
+## 7. Kredensial Masuk Bawaan (Default Login)
+
+* **Username:** `admin`
+* **Password:** `nekyuyun2026`
+
+Untuk mengganti username dan password, sesuaikan variabel `APP_USER` dan `APP_PASS` pada berkas `.env` atau `docker-compose.yml`.
