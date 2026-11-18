@@ -883,7 +883,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
 
         let tableText = 'BULAN    | MASUK       | KELUAR      | SELISIH     | SALDO\n';
         tableText += '---------+-------------+-------------+-------------+-------------\n';
-        for (const m of a.months) {
+        for (const m of [...a.months].reverse()) {
             const bStr = m.month_short.padEnd(8);
             const mStr = formatRupiahTrace(m.income).padStart(11);
             const kStr = formatRupiahTrace(m.expense).padStart(11);
@@ -920,7 +920,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             replyText += 'Tidak ada transaksi pengeluaran yang cocok.';
         } else {
             replyText += 'Daftar transaksi terakhir:\n';
-            transactions.slice(-10).forEach((t, i) => {
+            transactions.slice(-10).reverse().forEach((t, i) => {
                 replyText += `${i + 1}. ${t.date} | ${formatRupiahTrace(t.amount)} | ${t.description}\n`;
             });
             if (count > 10) {

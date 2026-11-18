@@ -3303,7 +3303,7 @@
                 if (!a.months || a.months.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400 italic">Belum ada data transaksi yang tercatat.</td></tr>`;
                 } else {
-                    tbody.innerHTML = a.months.map(m => {
+                    tbody.innerHTML = [...a.months].reverse().map(m => {
                         const diffClass = m.diff >= 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold';
                         const balClass = m.cumulative_balance >= 0 ? 'text-slate-900 font-bold' : 'text-rose-700 font-bold';
                         return `

@@ -175,7 +175,7 @@ async function handleRequest(req, res) {
             invoice.months_list = monthsList;
             invoice.months_label = formatMonthsDisplay(monthsList);
 
-            const payments = db.prepare('SELECT id, invoice_id, amount, payment_method, payment_date, notes, created_at FROM invoice_payments WHERE invoice_id = ? ORDER BY payment_date ASC, created_at ASC').all(invoiceId);
+            const payments = db.prepare('SELECT id, invoice_id, amount, payment_method, payment_date, notes, created_at FROM invoice_payments WHERE invoice_id = ? ORDER BY payment_date DESC, created_at DESC').all(invoiceId);
 
             const rawSettings = getSettings();
             const publicSettings = {
