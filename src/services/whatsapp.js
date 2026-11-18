@@ -935,7 +935,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
     // 17. Riwayat: #riwayat
     if (/^#?riwayat$/i.test(trimmed)) {
         const { transactions, current_balance } = getUnifiedTransactions();
-        const recent = transactions.slice(-10);
+        const recent = transactions.slice(-10).reverse();
 
         let replyText = `*10 Transaksi Terakhir (Saldo Uang Saat Ini: ${formatRupiahTrace(current_balance)}):*\n\n`;
         if (recent.length === 0) {
