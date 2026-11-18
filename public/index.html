@@ -1702,9 +1702,12 @@
             if (barEl) barEl.style.width = `${rate}%`;
 
             document.getElementById('stat-unpaid-amount').innerText = formatRupiah(s.totalUnpaid);
-            const overdueCount = (s.overdueList || []).length;
+            const overdueList = s.overdueList || [];
+            const overdueInvoiceCount = overdueList.length;
+            const overdueUnitCount = new Set(overdueList.map(i => i.room_id || i.room_number)).size;
             const partialCount = s.partialInvoicesCount || 0;
-            document.getElementById('stat-overdue-count').innerText = `${overdueCount} unit nunggak/jatuh tempo${partialCount > 0 ? ` (${partialCount} dicicil)` : ''}`;
+            const invoiceDetail = overdueInvoiceCount > overdueUnitCount ? ` (${overdueInvoiceCount} tagihan)` : '';
+            document.getElementById('stat-overdue-count').innerText = `${overdueUnitCount} unit${invoiceDetail} nunggak/jatuh tempo${partialCount > 0 ? ` (${partialCount} dicicil)` : ''}`;
 
             const pendingCount = (s.pendingList || []).length;
             const pendingCountEl = document.getElementById('stat-pending-count');
