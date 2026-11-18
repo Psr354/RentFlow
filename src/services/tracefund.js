@@ -69,7 +69,8 @@ function getUnifiedTransactions(filters = {}) {
             'keluar' as type,
             e.amount,
             (e.category || ': ' || COALESCE(e.note, '-')) as description,
-            e.category
+            e.category,
+            e.note
         FROM expenses e
     `).all();
 

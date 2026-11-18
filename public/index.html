@@ -2266,11 +2266,16 @@
                 tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400 italic">Belum ada catatan pengeluaran.</td></tr>`;
                 return;
             }
-            tbody.innerHTML = list.map(e => `
+            tbody.innerHTML = list.map(e => {
+                const rawDesc = e.description && e.category
+                    ? e.description.replace(new RegExp('^' + e.category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':\\s*', 'i'), '')
+                    : (e.description || '');
+                const displayNote = (e.note && String(e.note).trim()) ? e.note : (rawDesc || '-');
+                return `
                 <tr class="hover:bg-slate-50">
                     <td class="py-3 px-4 font-medium text-slate-700">${e.date}</td>
                     <td class="py-3 px-4 font-bold text-slate-900">${e.category}</td>
-                    <td class="py-3 px-4 text-slate-500">${e.note || '-'}</td>
+                    <td class="py-3 px-4 text-slate-500">${displayNote}</td>
                     <td class="py-3 px-4 font-bold text-rose-600">${formatRupiah(e.amount)}</td>
                     <td class="py-3 px-4 text-center">
                         <button onclick="deleteExpense('${e.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded">
@@ -2278,7 +2283,8 @@
                         </button>
                     </td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
             lucide.createIcons();
         }
 
@@ -3354,7 +3360,7 @@
                             badgeBox.classList.remove('hidden');
                             badgeText.innerText = `Ditemukan ${data.count} transaksi untuk "${data.keyword}": Total ${formatRupiah(data.total_amount)}`;
                         }
-                        const filteredExpenses = (data.transactions || []).filter(t => t.type === 'keluar');
+                        const filteredExpenses = (data.transactions || []).filter(t => t.type === 'keluar').reverse();
                         renderExpenses(filteredExpenses);
                     }
                 } catch (err) {
