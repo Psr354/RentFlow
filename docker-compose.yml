@@ -4,7 +4,7 @@ services:
     container_name: kontrakan_yuyun
     restart: unless-stopped
     ports:
-      - "5005:5000"
+      - "3001:5000"
     environment:
       - NODE_ENV=production
       - PORT=5000
