@@ -258,7 +258,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             `Seluruh anggota keluarga di grup ini sekarang dapat mencatat pengeluaran dan memantau kontrakan:\n` +
             `• *Catat Pengeluaran:* \`#keluar [Nominal] [Kategori opsional] [Keterangan]\`\n` +
             `• *Catat Pemasukan:* \`#masuk [Nominal] [Keterangan]\`\n` +
-            `• *Cek Saldo Kas:* \`#saldo\`\n` +
+            `• *Cek Saldo Uang Saat Ini:* \`#saldo\`\n` +
             `• *Cek Status Kontrakan:* \`#status\`\n` +
             `• *Bantuan Lengkap:* \`#bantuan\``;
 
@@ -341,7 +341,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             `Nominal: Rp ${amount.toLocaleString('id-ID')}\n` +
             `Keterangan: ${note || '-'}\n` +
             `Total pengeluaran bulan ini: Rp ${Number(totalMonthly).toLocaleString('id-ID')}\n` +
-            `Saldo kas saat ini: Rp ${Number(current_balance).toLocaleString('id-ID')}`;
+            `Saldo uang saat ini: Rp ${Number(current_balance).toLocaleString('id-ID')}`;
 
         if (bRow && bRow.amount > 0) {
             const remaining = bRow.amount - totalMonthly;
@@ -394,7 +394,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             `Nominal: Rp ${amount.toLocaleString('id-ID')}\n` +
             `Keterangan: ${note || '-'}\n` +
             `Total pemasukan bulan ini: Rp ${Number(totalMonthlyIn).toLocaleString('id-ID')}\n` +
-            `Saldo kas saat ini: Rp ${Number(current_balance).toLocaleString('id-ID')}`;
+            `Saldo uang saat ini: Rp ${Number(current_balance).toLocaleString('id-ID')}`;
 
         await safeSend(replyText);
         return { success: true, replyText };
@@ -426,7 +426,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             `Kategori: ${target.category}\n` +
             `Nominal: Rp ${Number(target.amount).toLocaleString('id-ID')}\n` +
             `Keterangan: ${target.note || '-'}\n` +
-            `Saldo kas saat ini: Rp ${Number(current_balance).toLocaleString('id-ID')}`;
+            `Saldo uang saat ini: Rp ${Number(current_balance).toLocaleString('id-ID')}`;
 
         await safeSend(replyText);
         return { success: true, replyText };
@@ -442,9 +442,9 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
         const diff = inTotal - outTotal;
         const bRow = db.prepare('SELECT amount FROM budgets WHERE month = ?').get(currentMonth);
 
-        let replyText = `*Laporan Saldo Kas & Arus Kas Kontrakan*\n` +
+        let replyText = `*Laporan Saldo Uang & Arus Kas Kontrakan*\n` +
             `Periode: ${formatMonthKey(currentMonth)}\n` +
-            `*Saldo Kas Saat Ini: Rp ${Number(current_balance).toLocaleString('id-ID')}*\n\n` +
+            `*Saldo Uang Saat Ini: Rp ${Number(current_balance).toLocaleString('id-ID')}*\n\n` +
             `*Arus Kas Bulan Ini:*\n` +
             `• Total Pemasukan: Rp ${Number(inTotal).toLocaleString('id-ID')} (${thisMonth.filter(t => t.type === 'masuk').length} transaksi)\n` +
             `• Total Pengeluaran: Rp ${Number(outTotal).toLocaleString('id-ID')} (${thisMonth.filter(t => t.type === 'keluar').length} transaksi)\n` +
@@ -827,7 +827,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             `• Pemasukan (${masukRows.length}x): Rp ${Number(masukTotal).toLocaleString('id-ID')}\n` +
             `• Pengeluaran (${keluarRows.length}x): Rp ${Number(keluarTotal).toLocaleString('id-ID')}\n` +
             `• Selisih Periode: Rp ${Number(selisih).toLocaleString('id-ID')}\n` +
-            `• Saldo Kas Berjalan: Rp ${Number(current_balance).toLocaleString('id-ID')}`;
+            `• Saldo Uang Saat Ini: Rp ${Number(current_balance).toLocaleString('id-ID')}`;
 
         if (catSummary) {
             replyText += `\n\n*Rincian Kategori Pengeluaran:*\n${catSummary}`;
@@ -893,7 +893,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
         }
 
         const replyText = `*Analisis Keuangan Lintas Bulan*\n` +
-            `Saldo saat ini: *${formatRupiahTrace(a.current_balance)}*\n` +
+            `Saldo uang saat ini: *${formatRupiahTrace(a.current_balance)}*\n` +
             `Pemasukan terbesar: *${a.highest_income ? formatMonthKey(a.highest_income.month) : '-'}* (${formatRupiahTrace(a.highest_income ? a.highest_income.income : 0)})\n` +
             `Pengeluaran terbesar: *${a.highest_expense ? formatMonthKey(a.highest_expense.month) : '-'}* (${formatRupiahTrace(a.highest_expense ? a.highest_expense.expense : 0)})\n` +
             `Selisih terbaik: *${a.best_diff ? formatMonthKey(a.best_diff.month) : '-'}* (${formatRupiahTrace(a.best_diff ? a.best_diff.diff : 0)})\n` +
@@ -937,7 +937,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
         const { transactions, current_balance } = getUnifiedTransactions();
         const recent = transactions.slice(-10);
 
-        let replyText = `*10 Transaksi Terakhir (Saldo Kas: ${formatRupiahTrace(current_balance)}):*\n\n`;
+        let replyText = `*10 Transaksi Terakhir (Saldo Uang Saat Ini: ${formatRupiahTrace(current_balance)}):*\n\n`;
         if (recent.length === 0) {
             replyText += 'Belum ada transaksi tercatat.';
         } else {

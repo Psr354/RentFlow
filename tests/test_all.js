@@ -230,13 +230,20 @@ async function testTraceFundCommands() {
     // 9.3 Perintah #saldo
     const resSaldo = await handleIncomingWhatsAppMessage(ownerPhone, '#saldo', 'test@s.whatsapp.net', null, false);
     assert.strictEqual(resSaldo.success, true, '#saldo harus berhasil mengembalikan laporan');
-    assert.match(resSaldo.replyText, /Laporan Saldo Kas/);
+    assert.match(resSaldo.replyText, /Laporan Saldo Uang/);
 
-    // 9.4 Perintah #budget (atur & cek)
+    // 9.4 Perintah #budget (atur & cek, lalu pulihkan kondisi awal agar tidak mencemari DB)
+    const testMonthKey = getMonthYearWIB();
+    const prevBudgetRow = appDb.prepare('SELECT amount FROM budgets WHERE month = ?').get(testMonthKey);
     const resSetBudget = await handleIncomingWhatsAppMessage(ownerPhone, '#budget 10jt', 'test@s.whatsapp.net', null, false);
     assert.strictEqual(resSetBudget.success, true, '#budget set harus berhasil');
     const resGetBudget = await handleIncomingWhatsAppMessage(ownerPhone, '#budget', 'test@s.whatsapp.net', null, false);
     assert.strictEqual(resGetBudget.success, true, '#budget view harus berhasil');
+    if (prevBudgetRow) {
+        appDb.prepare('UPDATE budgets SET amount = ? WHERE month = ?').run(prevBudgetRow.amount, testMonthKey);
+    } else {
+        appDb.prepare('DELETE FROM budgets WHERE month = ?').run(testMonthKey);
+    }
 
     // 9.5 Perintah #kategori
     const resKategori = await handleIncomingWhatsAppMessage(ownerPhone, '#kategori', 'test@s.whatsapp.net', null, false);
