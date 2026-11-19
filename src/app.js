@@ -18,9 +18,10 @@ const server = http.createServer(async (req, res) => {
     try {
         await handleRequest(req, res);
     } catch (err) {
+        console.error('[HTTP Server Error]', err);
         if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(JSON.stringify({ success: false, message: 'Internal Server Error: ' + err.message }));
+            res.end(JSON.stringify({ success: false, message: 'Internal Server Error' }));
         }
     }
 });

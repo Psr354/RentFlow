@@ -1727,6 +1727,7 @@
         let expenseSearchQuery = '';
         let activeComplaintFilter = 'ALL';
         let currentBase64Qris = '';
+        let currentDashboardStats = null;
 
         function authHeaders() {
             const token = sessionStorage.getItem('admin_token');
@@ -2067,6 +2068,7 @@
         }
 
         function renderDashboardStats(s) {
+            currentDashboardStats = s;
             document.getElementById('stat-total-rooms').innerText = s.totalRooms || 11;
             document.getElementById('stat-occupied-rooms').innerText = s.occupiedRooms || 0;
             const rate = s.totalRooms > 0 ? Math.round((s.occupiedRooms / s.totalRooms) * 100) : 0;
@@ -2122,14 +2124,14 @@
                 pendingList.innerHTML = s.pendingList.map(item => `
                     <div class="bg-white p-3 rounded-xl border border-amber-200 flex items-center justify-between text-xs">
                         <div>
-                            <span class="font-bold text-slate-800">${item.room_number}</span> - <span class="text-slate-600">${item.tenant_name || 'Penghuni'}</span>
-                            <span class="text-slate-400">(${item.month_year})</span>
+                            <span class="font-bold text-slate-800">${escapeHtml(item.room_number)}</span> - <span class="text-slate-600">${escapeHtml(item.tenant_name || 'Penghuni')}</span>
+                            <span class="text-slate-400">(${escapeHtml(item.month_year)})</span>
                             <span class="font-bold text-indigo-600 ml-2">${formatRupiah(item.amount)}</span>
                             ${item.paid_amount > 0 ? `<span class="text-[10px] text-emerald-600 font-bold ml-1">(Masuk: ${formatRupiah(item.paid_amount)})</span>` : ''}
                         </div>
                         <div class="flex items-center gap-2">
-                            ${item.payment_proof ? `<button onclick="openProofModal('${item.id}', '${item.payment_proof}', '${item.payment_method}', '${item.notes || ''}', ${item.remaining_amount !== undefined ? item.remaining_amount : item.amount})" class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg font-bold">Lihat Bukti</button>` : ''}
-                            <button onclick="openPaymentModal('${item.id}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold">Verifikasi / Bayar</button>
+                            ${item.payment_proof ? `<button onclick="openProofModal('${escapeHtml(item.id)}')" class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg font-bold">Lihat Bukti</button>` : ''}
+                            <button onclick="openPaymentModal('${escapeHtml(item.id)}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold">Verifikasi / Bayar</button>
                         </div>
                     </div>
                 `).join('');
@@ -2803,7 +2805,7 @@
                                 ` : ''}
 
                                 ${inv.payment_proof ? `
-                                    <button type="button" onclick="openProofModal('${inv.id}', '${inv.payment_proof}', '${inv.payment_method}', '${escapeHtml(inv.notes || '')}', ${remaining})" class="w-7 h-7 flex items-center justify-center rounded-lg text-amber-600 hover:text-amber-700 hover:bg-white transition" title="Lihat Bukti Transfer">
+                                    <button type="button" onclick="openProofModal('${escapeHtml(inv.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-amber-600 hover:text-amber-700 hover:bg-white transition" title="Lihat Bukti Transfer">
                                         <i data-lucide="image" class="w-3.5 h-3.5"></i>
                                     </button>
                                 ` : ''}
@@ -3020,11 +3022,11 @@
                 }
                 tbody.innerHTML = logs.map(l => `
                     <tr class="hover:bg-slate-50">
-                        <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">${l.created_at.replace('T', ' ').slice(0, 19)}</td>
-                        <td class="py-3 px-4 font-bold">${l.channel}</td>
-                        <td class="py-3 px-4 font-mono">${l.recipient}</td>
-                        <td class="py-3 px-4 font-bold ${l.status === 'SUCCESS' ? 'text-emerald-600' : 'text-rose-600'}">${l.status}</td>
-                        <td class="py-3 px-4 text-slate-600">${l.message || '-'}</td>
+                        <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">${escapeHtml(l.created_at ? l.created_at.replace('T', ' ').slice(0, 19) : '-')}</td>
+                        <td class="py-3 px-4 font-bold">${escapeHtml(l.channel)}</td>
+                        <td class="py-3 px-4 font-mono">${escapeHtml(l.recipient)}</td>
+                        <td class="py-3 px-4 font-bold ${l.status === 'SUCCESS' ? 'text-emerald-600' : 'text-rose-600'}">${escapeHtml(l.status)}</td>
+                        <td class="py-3 px-4 text-slate-600">${escapeHtml(l.message || '-')}</td>
                     </tr>
                 `).join('');
             } catch (e) {}
@@ -3033,7 +3035,7 @@
         let waPollTimer = null;
         async function checkWaStatus() {
             try {
-                const res = await fetch('/api/wa/status');
+                const res = await fetch('/api/wa/status', { headers: authHeaders() });
                 const data = await res.json();
                 const badge = document.getElementById('wa-status-badge');
                 const qrBox = document.getElementById('wa-qr-box');
@@ -3969,15 +3971,18 @@
 
         // Proof Modal
         function openProofModal(id, proofUrl, method, notes, remainingAmount) {
-            const inv = invoicesData.find(i => i.id === id);
+            const inv = invoicesData.find(i => i.id === id) || (currentDashboardStats?.pendingList || []).find(i => i.id === id);
+            const pUrl = proofUrl || inv?.payment_proof || '';
+            const pMethod = method || inv?.payment_method || 'Transfer';
+            const pNotes = notes !== undefined ? notes : (inv?.notes || '-');
             const remaining = remainingAmount !== undefined ? remainingAmount : (inv ? (inv.remaining_amount !== undefined ? inv.remaining_amount : inv.amount) : 0);
 
-            document.getElementById('modal-proof-img').src = proofUrl;
+            document.getElementById('modal-proof-img').src = pUrl;
             document.getElementById('modal-proof-meta').innerHTML = `
                 <div class="grid grid-cols-2 gap-2">
-                    <p><strong>ID Tagihan:</strong> ${id}</p>
-                    <p><strong>Metode Bayar:</strong> ${method || 'Transfer'}</p>
-                    <p class="col-span-2"><strong>Catatan Penyewa:</strong> ${notes || '-'}</p>
+                    <p><strong>ID Tagihan:</strong> ${escapeHtml(id)}</p>
+                    <p><strong>Metode Bayar:</strong> ${escapeHtml(pMethod)}</p>
+                    <p class="col-span-2"><strong>Catatan Penyewa:</strong> ${escapeHtml(pNotes || '-')}</p>
                     <p class="col-span-2"><strong>Sisa Tagihan Saat Ini:</strong> ${formatRupiah(remaining)}</p>
                 </div>
                 <div class="mt-3 pt-3 border-t">
@@ -3990,7 +3995,7 @@
             approveBtn.onclick = () => {
                 const rawAmount = document.getElementById('modal-proof-amount')?.value;
                 const amount = parseInt(String(rawAmount).replace(/[^0-9]/g, ''), 10) || remaining;
-                markAsPaid(id, method, amount);
+                markAsPaid(id, pMethod, amount);
             };
             document.getElementById('modal-proof').classList.remove('hidden');
             lucide.createIcons();
@@ -4318,20 +4323,20 @@
                 return `
                 <tr class="hover:bg-slate-50/80 transition">
                     <td class="py-3 px-4">
-                        <span class="font-extrabold text-slate-900 text-sm">${c.room_number}</span>
-                        <p class="text-[11px] text-slate-400 mt-0.5">${dateStr}</p>
+                        <span class="font-extrabold text-slate-900 text-sm">${escapeHtml(c.room_number)}</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(dateStr)}</p>
                     </td>
                     <td class="py-3 px-4">
-                        <p class="font-bold text-slate-800">${c.tenant_name || '-'}</p>
-                        <p class="text-[11px] font-mono text-slate-500">${c.tenant_phone || '-'}</p>
+                        <p class="font-bold text-slate-800">${escapeHtml(c.tenant_name || '-')}</p>
+                        <p class="text-[11px] font-mono text-slate-500">${escapeHtml(c.tenant_phone || '-')}</p>
                     </td>
                     <td class="py-3 px-4 max-w-xs">
-                        <span class="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 mb-1 border border-slate-200">${c.category || 'Fasilitas'}</span>
-                        <p class="text-xs text-slate-700 leading-snug break-words">${c.description}</p>
+                        <span class="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 mb-1 border border-slate-200">${escapeHtml(c.category || 'Fasilitas')}</span>
+                        <p class="text-xs text-slate-700 leading-snug break-words">${escapeHtml(c.description)}</p>
                     </td>
                     <td class="py-3 px-4 text-center">
                         ${c.photo_url ? `
-                            <button onclick="openComplaintPhotoModal('${c.photo_url}', '${c.room_number} - ${c.tenant_name}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs inline-flex items-center gap-1 border border-indigo-200">
+                            <button onclick="openComplaintPhotoModal('${escapeHtml(c.id)}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs inline-flex items-center gap-1 border border-indigo-200">
                                 <i data-lucide="image" class="w-3.5 h-3.5"></i> Lihat Foto
                             </button>
                         ` : '<span class="text-slate-400 text-xs italic">-</span>'}
@@ -4728,9 +4733,16 @@
             }
         }
 
-        function openComplaintPhotoModal(url, title) {
-            document.getElementById('modal-complaint-img').src = url;
-            document.getElementById('modal-complaint-title').innerText = 'Foto Kerusakan: ' + title;
+        function openComplaintPhotoModal(idOrUrl, title) {
+            let imgUrl = idOrUrl;
+            let displayTitle = title;
+            const c = complaintsData.find(item => item.id === idOrUrl);
+            if (c) {
+                imgUrl = c.photo_url || '';
+                displayTitle = `${c.room_number || ''} - ${c.tenant_name || ''}`;
+            }
+            document.getElementById('modal-complaint-img').src = imgUrl;
+            document.getElementById('modal-complaint-title').innerText = 'Foto Kerusakan: ' + (displayTitle || '-');
             document.getElementById('modal-complaint-photo').classList.remove('hidden');
             lucide.createIcons();
         }

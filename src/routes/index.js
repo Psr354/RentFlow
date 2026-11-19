@@ -9,6 +9,8 @@ const {
     createAuthToken,
     tokens,
     checkRateLimit,
+    getClientIp,
+    verifyWebhookSecret,
     saveBase64Image,
     send,
     readBody,
@@ -96,7 +98,7 @@ async function handleRequest(req, res) {
 
     // 2. Auth API
     if (req.method === 'POST' && pathname === '/api/login') {
-        const clientIp = req.socket.remoteAddress || 'unknown';
+        const clientIp = getClientIp(req);
         if (!checkRateLimit(clientIp, 'admin_login', 10, 10 * 60 * 1000)) {
             return send(res, 429, { success: false, message: 'Terlalu banyak percobaan masuk yang gagal. Silakan tunggu 10 menit.' });
         }
@@ -118,6 +120,9 @@ async function handleRequest(req, res) {
 
     // 3. Webhook Eksternal WhatsApp (Kompatibel dengan Fonnte / Gateway lain)
     if (req.method === 'POST' && pathname === '/api/webhook/whatsapp') {
+        if (!verifyWebhookSecret(req)) {
+            return send(res, 401, { success: false, message: 'Unauthorized: Webhook secret tidak valid atau belum disertakan' });
+        }
         readBody(req, res, async (body) => {
             try {
                 const data = JSON.parse(body || '{}');
@@ -135,7 +140,7 @@ async function handleRequest(req, res) {
     // 4. Public API: Portal Tagihan Penyewa
     if (pathname.startsWith('/api/public/invoice/')) {
         const invoiceId = decodeURIComponent(pathname.replace('/api/public/invoice/', '').trim());
-        const clientIp = req.socket.remoteAddress || 'unknown';
+        const clientIp = getClientIp(req);
 
         if (req.method === 'GET') {
             if (!checkRateLimit(clientIp, 'public_invoice_get', 60, 60 * 1000)) {
@@ -211,9 +216,12 @@ async function handleRequest(req, res) {
 
                     if (!invoice) return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
 
-                    // Jika invoice memiliki access_token dan token disertakan namun tidak cocok
-                    if (invoice.access_token && token && token !== invoice.access_token && !isAuthed(req)) {
-                        return send(res, 403, { success: false, message: 'Akses ditolak: Token tagihan tidak valid' });
+                    // Validasi token tagihan jika bukan admin terotentikasi
+                    const sentToken = token || query.token || '';
+                    if (!isAuthed(req)) {
+                        if (invoice.access_token && sentToken !== invoice.access_token) {
+                            return send(res, 403, { success: false, message: 'Akses ditolak: Token tagihan tidak valid' });
+                        }
                     }
 
                     const payNominal = Number(amount) > 0 ? Number(amount) : invoice.remaining_amount;
@@ -265,7 +273,7 @@ async function handleRequest(req, res) {
 
     // Public API: Layanan Keluhan Penghuni
     if (pathname === '/api/public/complaints') {
-        const clientIp = req.socket.remoteAddress || 'unknown';
+        const clientIp = getClientIp(req);
 
         if (req.method === 'GET') {
             if (!checkRateLimit(clientIp, 'public_complaints_get', 60, 60 * 1000)) {
@@ -337,7 +345,14 @@ async function handleRequest(req, res) {
         }
     }
 
-    // Status WhatsApp Bot Mandiri (Dapat diakses publik/dashboard)
+    // Endpoint berikut memerlukan otentikasi Admin
+    if (pathname.startsWith('/api/')) {
+        if (!isAuthed(req)) {
+            return send(res, 401, { success: false, message: 'Unauthorized (Sesi telah berakhir atau belum login)' });
+        }
+    }
+
+    // Status WhatsApp Bot Mandiri (Hanya untuk Admin terotentikasi)
     if (pathname === '/api/wa/status' && req.method === 'GET') {
         const waInfo = getWaStatus();
         return send(res, 200, {
@@ -345,13 +360,6 @@ async function handleRequest(req, res) {
             qr: waInfo.qr,
             user: waInfo.connected_user
         });
-    }
-
-    // Endpoint berikut memerlukan otentikasi Admin
-    if (pathname.startsWith('/api/')) {
-        if (!isAuthed(req)) {
-            return send(res, 401, { success: false, message: 'Unauthorized (Sesi telah berakhir atau belum login)' });
-        }
     }
 
     // Kontrol WhatsApp Socket (Restart & Logout)
@@ -546,6 +554,7 @@ async function handleRequest(req, res) {
         }
 
         if (req.method === 'DELETE') {
+            db.exec('BEGIN IMMEDIATE;');
             try {
                 const invRows = db.prepare('SELECT id FROM invoices WHERE room_id = ?').all(id);
                 for (const inv of invRows) {
@@ -554,8 +563,10 @@ async function handleRequest(req, res) {
                 db.prepare('DELETE FROM invoices WHERE room_id = ?').run(id);
                 db.prepare('DELETE FROM complaints WHERE room_id = ?').run(id);
                 db.prepare('DELETE FROM rooms WHERE id = ?').run(id);
+                db.exec('COMMIT;');
                 return send(res, 200, { success: true, message: 'Unit dan seluruh data terkait berhasil dihapus' });
             } catch (err) {
+                db.exec('ROLLBACK;');
                 return send(res, 500, { success: false, message: 'Gagal menghapus unit: ' + err.message });
             }
         }
@@ -1064,19 +1075,33 @@ async function handleRequest(req, res) {
     // 10. Settings API
     if (pathname === '/api/settings') {
         if (req.method === 'GET') {
-            return send(res, 200, getSettings());
+            const raw = getSettings();
+            const safe = { ...raw };
+            delete safe.jwt_secret;
+            delete safe.wa_webhook_secret;
+            if (safe.smtp_pass) safe.smtp_pass = '********';
+            return send(res, 200, safe);
         }
 
         if (req.method === 'POST') {
             readBody(req, res, (body) => {
                 try {
                     const newSettings = JSON.parse(body || '{}');
+                    // Cegah modifikasi kunci kriptografi rahasia via formulir web
+                    delete newSettings.jwt_secret;
+                    delete newSettings.wa_webhook_secret;
+
+                    // Jika kata sandi smtp tidak diubah (berisi masker ********), pertahankan nilai lama
+                    if (newSettings.smtp_pass === '********') {
+                        delete newSettings.smtp_pass;
+                    }
+
                     for (const [k, v] of Object.entries(newSettings)) {
                         setSetting(k, v);
                     }
                     return send(res, 200, { success: true, message: 'Pengaturan berhasil disimpan' });
                 } catch (err) {
-                    return send(res, 500, { success: false, message: err.message });
+                    return send(res, 500, { success: false, message: 'Format data tidak valid' });
                 }
             });
             return;

@@ -44,98 +44,62 @@ assert.match(ymWib, /^\d{4}-\d{2}$/, 'Format bulan-tahun WIB harus YYYY-MM');
 console.log(`✓ [2/7] Helper Waktu WIB tervalidasi: ${todayWib} (${ymWib}).`);
 
 // 3. Pengujian Validasi Gambar Base64 & Magic Bytes
-function testValidateBase64(dataUri) {
-    const matches = dataUri.match(/^data:image\/(jpeg|jpg|png|webp);base64,(.+)$/i);
-    if (!matches) return false;
-    let buffer;
-    try {
-        buffer = Buffer.from(matches[2], 'base64');
-    } catch (_) {
-        return false;
-    }
-    const isJpeg = buffer.length > 3 && buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
-    const isPng = buffer.length > 4 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
-    const isWebp = buffer.length > 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
-    return isJpeg || isPng || isWebp;
-}
+const {
+    saveBase64Image,
+    checkRateLimit: realCheckRateLimit,
+    getClientIp,
+    isAuthed: realIsAuthed,
+    createAuthToken: realCreateAuthToken,
+    verifyWebhookSecret,
+    maskTenantName: realMaskTenantName
+} = require('../src/utils/security.js');
 
 // 1x1 valid PNG base64
 const validPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 // Fake image: PHP script masked as image
 const fakePhpImage = 'data:image/png;base64,' + Buffer.from('<?php echo "evil"; ?>').toString('base64');
 
-assert.strictEqual(testValidateBase64(validPng), true, 'Valid PNG harus diterima');
-assert.strictEqual(testValidateBase64(fakePhpImage), false, 'File palsu/ekstensi manipulasi harus ditolak');
+const savedValid = saveBase64Image(validPng, 'test_val');
+assert(savedValid !== null, 'Valid PNG harus diterima dan disimpan');
+if (savedValid) {
+    const fullSaved = path.join(__dirname, '../data', savedValid);
+    if (fs.existsSync(fullSaved)) fs.unlinkSync(fullSaved);
+}
+assert.strictEqual(saveBase64Image(fakePhpImage, 'test_fake'), null, 'File palsu/ekstensi manipulasi harus ditolak');
 console.log('✓ [3/7] Validasi Base64 & Magic Bytes tervalidasi.');
 
-// 4. Pengujian Rate Limiter
-const rateLimitMap = new Map();
-function checkRateLimit(ip, endpointKey, maxRequests, windowMs) {
-    const key = `${ip || 'unknown'}:${endpointKey}`;
-    const now = Date.now();
-    let record = rateLimitMap.get(key);
-    if (!record || now > record.resetTime) {
-        record = { count: 1, resetTime: now + windowMs };
-        rateLimitMap.set(key, record);
-        return true;
-    }
-    record.count++;
-    if (record.count > maxRequests) {
-        return false;
-    }
-    return true;
-}
-
+// 4. Pengujian Rate Limiter & Reverse Proxy IP
 const testIp = '192.168.1.100';
 for (let i = 0; i < 5; i++) {
-    assert.strictEqual(checkRateLimit(testIp, 'test_ep', 5, 1000), true, `Request ${i + 1} harus diizinkan`);
+    assert.strictEqual(realCheckRateLimit(testIp, 'test_ep_sec', 5, 1000), true, `Request ${i + 1} harus diizinkan`);
 }
 // Request ke-6 harus ditolak
-assert.strictEqual(checkRateLimit(testIp, 'test_ep', 5, 1000), false, 'Request melebihi batas harus ditolak');
-console.log('✓ [4/7] In-memory Rate Limiter tervalidasi.');
+assert.strictEqual(realCheckRateLimit(testIp, 'test_ep_sec', 5, 1000), false, 'Request melebihi batas harus ditolak');
 
-// 5. Pengujian Keamanan Autentikasi Admin
-const TEST_JWT_SECRET = 'super-secret-key-12345678901234567890';
-function createTestToken(username) {
-    const payload = JSON.stringify({ u: username, exp: Date.now() + 60000 });
-    const b64 = Buffer.from(payload).toString('base64url');
-    const sig = crypto.createHmac('sha256', TEST_JWT_SECRET).update(b64).digest('base64url');
-    return `${b64}.${sig}`;
-}
+// Uji penanganan IP reverse proxy
+process.env.TRUST_PROXY = '1';
+const mockProxyReq = { headers: { 'x-forwarded-for': '203.0.113.195, 192.168.1.1' }, socket: { remoteAddress: '127.0.0.1' } };
+assert.strictEqual(getClientIp(mockProxyReq), '203.0.113.195', 'getClientIp harus mengekstrak client IP asli dari X-Forwarded-For jika TRUST_PROXY aktif');
+console.log('✓ [4/7] In-memory Rate Limiter & Trusted Proxy tervalidasi.');
 
-function verifyTestToken(token) {
-    if (!token || !token.includes('.')) return false;
-    const parts = token.split('.');
-    if (parts.length !== 2) return false;
-    const [b64, sig] = parts;
-    const expectedSig = crypto.createHmac('sha256', TEST_JWT_SECRET).update(b64).digest('base64url');
-    const bSig = Buffer.from(sig);
-    const bExp = Buffer.from(expectedSig);
-    if (bSig.length === bExp.length && crypto.timingSafeEqual(bSig, bExp)) {
-        try {
-            const payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8'));
-            if (payload.exp && Date.now() < payload.exp) return true;
-        } catch (_) {}
-    }
-    return false;
-}
+// 5. Pengujian Keamanan Autentikasi Admin & Webhook Secret
+const validToken = realCreateAuthToken('admin');
+assert.strictEqual(realIsAuthed({ headers: { authorization: `Bearer ${validToken}` } }), true, 'Token HMAC valid harus diterima oleh isAuthed produksi');
+assert.strictEqual(realIsAuthed({ headers: { authorization: 'Bearer tok_bypass_arbitrary_string' } }), false, 'Token palsu tok_bypass HARUS ditolak');
+assert.strictEqual(realIsAuthed({ headers: { authorization: 'Bearer session_fake_token' } }), false, 'Token session_fake HARUS ditolak');
+assert.strictEqual(realIsAuthed({ headers: { authorization: `Bearer ${validToken}corrupt` } }), false, 'Token yang dirusak HARUS ditolak');
 
-const validToken = createTestToken('admin');
-assert.strictEqual(verifyTestToken(validToken), true, 'Token HMAC valid harus diterima');
-assert.strictEqual(verifyTestToken('tok_bypass_arbitrary_string'), false, 'Token palsu tok_bypass HARUS ditolak');
-assert.strictEqual(verifyTestToken('session_fake_token'), false, 'Token session_fake HARUS ditolak');
-assert.strictEqual(verifyTestToken(validToken + 'corrupt'), false, 'Token yang dirusak HARUS ditolak');
-console.log('✓ [5/7] Keamanan HMAC & eliminasi auth bypass tervalidasi.');
+// Uji Webhook Secret Verification
+const { WA_WEBHOOK_SECRET } = require('../src/utils/security.js');
+assert.strictEqual(verifyWebhookSecret({ headers: { 'x-webhook-secret': WA_WEBHOOK_SECRET } }), true, 'Webhook secret yang valid harus diterima');
+assert.strictEqual(verifyWebhookSecret({ headers: { 'x-webhook-secret': 'wrong-secret' } }), false, 'Webhook secret yang salah harus ditolak');
+assert.strictEqual(verifyWebhookSecret({ headers: {} }), false, 'Permintaan tanpa webhook secret harus ditolak');
+console.log('✓ [5/7] Keamanan HMAC, eliminasi auth bypass, & Webhook Secret tervalidasi.');
 
 // 6. Pengujian Privasi Data Penghuni
 const sampleTenant = 'Budi Santoso';
-function maskTenantName(name) {
-    if (!name) return 'Penghuni';
-    const parts = name.trim().split(' ');
-    return parts[0] + (parts.length > 1 ? ' ***' : '');
-}
-assert.strictEqual(maskTenantName(sampleTenant), 'Budi ***', 'Nama penyewa harus disamarkan untuk akses tanpa token');
-assert.strictEqual(maskTenantName('Andi'), 'Andi', 'Nama satu kata tetap terjaga formatnya');
+assert.strictEqual(realMaskTenantName(sampleTenant), 'Budi ***', 'Nama penyewa harus disamarkan untuk akses tanpa token');
+assert.strictEqual(realMaskTenantName('Andi'), 'Andi', 'Nama satu kata tetap terjaga formatnya');
 console.log('✓ [6/7] Mekanisme penyembunyian privasi data penghuni tervalidasi.');
 
 // 7. Pengujian Pembatasan Berkas Statis /uploads
@@ -297,19 +261,23 @@ async function testTraceFundCommands() {
     const authToken = createAuthToken('admin');
     tokens.set(authToken, Date.now() + 60000);
 
-    function makeRequest(port, method, reqPath, data = null) {
+    function makeRequest(port, method, reqPath, data = null, customHeaders = null) {
         return new Promise((resolve, reject) => {
             const payload = data ? JSON.stringify(data) : null;
+            const headers = customHeaders !== null ? {
+                ...customHeaders,
+                ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+            } : {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json',
+                ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+            };
             const req = http.request({
                 hostname: '127.0.0.1',
                 port,
                 method,
                 path: reqPath,
-                headers: {
-                    'Authorization': `Bearer ${authToken}`,
-                    'Content-Type': 'application/json',
-                    ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
-                }
+                headers
             }, (res) => {
                 let body = '';
                 res.on('data', chunk => body += chunk);
@@ -531,6 +499,57 @@ async function testTraceFundCommands() {
                 assert.strictEqual(delCmp.statusCode, 200);
                 const checkCmpAfterDel = appDb.prepare('SELECT * FROM complaints WHERE id = ?').get(testCmpId);
                 assert.strictEqual(checkCmpAfterDel, undefined);
+
+                // 11.7 Pengujian Proteksi Token Konfirmasi Tagihan Publik
+                const testSecInvId = 'test-sec-inv';
+                let validRoom = appDb.prepare('SELECT id FROM rooms LIMIT 1').get();
+                if (!validRoom) {
+                    appDb.prepare("INSERT INTO rooms (id, number, status) VALUES ('room-sec-test', '99.X', 'TERISI')").run();
+                    validRoom = { id: 'room-sec-test' };
+                }
+                appDb.prepare(`
+                    INSERT INTO invoices (id, room_id, month_year, amount, due_date, status, access_token, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'BELUM_BAYAR', ?, ?)
+                `).run(testSecInvId, validRoom.id, 'November 2026', 800000, '2026-11-20', 'secret-token-xyz', new Date().toISOString());
+
+                // Konfirmasi tanpa token atau token kosong harus ditolak (403)
+                const resBypass = await makeRequest(port, 'POST', `/api/public/invoice/${testSecInvId}`, {
+                    amount: 800000,
+                    notes: 'Coba bypass tanpa token'
+                }, { 'Content-Type': 'application/json' });
+                assert.strictEqual(resBypass.statusCode, 403, 'Konfirmasi pembayaran publik tanpa token HARUS ditolak dengan status 403');
+
+                // Konfirmasi dengan token yang salah harus ditolak (403)
+                const resWrongToken = await makeRequest(port, 'POST', `/api/public/invoice/${testSecInvId}`, {
+                    token: 'wrong-token',
+                    amount: 800000
+                }, { 'Content-Type': 'application/json' });
+                assert.strictEqual(resWrongToken.statusCode, 403, 'Konfirmasi pembayaran publik dengan token salah HARUS ditolak');
+
+                // Konfirmasi dengan token yang valid harus diterima (200)
+                const resValidToken = await makeRequest(port, 'POST', `/api/public/invoice/${testSecInvId}`, {
+                    token: 'secret-token-xyz',
+                    amount: 800000
+                }, { 'Content-Type': 'application/json' });
+                assert.strictEqual(resValidToken.statusCode, 200, 'Konfirmasi pembayaran publik dengan token cocok HARUS diterima');
+                appDb.prepare('DELETE FROM invoices WHERE id = ?').run(testSecInvId);
+
+                // 11.8 Pengujian Keamanan Webhook WhatsApp
+                const resNoSecret = await makeRequest(port, 'POST', '/api/webhook/whatsapp', {
+                    sender: '08812552006',
+                    message: '#saldo'
+                }, { 'Content-Type': 'application/json' });
+                assert.strictEqual(resNoSecret.statusCode, 401, 'Webhook tanpa x-webhook-secret HARUS ditolak dengan status 401');
+
+                // 11.9 Pengujian Masking Kredensial pada Settings API
+                const resSettings = await makeRequest(port, 'GET', '/api/settings');
+                assert.strictEqual(resSettings.statusCode, 200);
+                assert.strictEqual(resSettings.body.jwt_secret, undefined, 'jwt_secret TIDAK boleh dibocorkan via /api/settings');
+                assert.strictEqual(resSettings.body.wa_webhook_secret, undefined, 'wa_webhook_secret TIDAK boleh dibocorkan via /api/settings');
+
+                // 11.10 Pengujian Otorisasi Endpoint Status WhatsApp
+                const resWaStatusUnauthed = await makeRequest(port, 'GET', '/api/wa/status', null, {});
+                assert.strictEqual(resWaStatusUnauthed.statusCode, 401, '/api/wa/status tanpa otentikasi HARUS ditolak dengan status 401');
 
                 appServer.close(resolve);
             } catch (err) {

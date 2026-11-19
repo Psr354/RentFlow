@@ -15,8 +15,9 @@ COPY server.js ./
 COPY src/ ./src/
 COPY public/ ./public/
 
-# Buat direktori data untuk persistensi database dan upload bukti transfer
-RUN mkdir -p /app/data /app/data/uploads
+# Buat direktori data untuk persistensi database dan upload bukti transfer, serta atur izin user node
+RUN mkdir -p /app/data /app/data/uploads /app/data/wa_session /app/data/backups \
+    && chown -R node:node /app
 
 # Set environment variabel produksi
 ENV NODE_ENV=production
@@ -33,6 +34,9 @@ VOLUME ["/app/data"]
 # Healthcheck status kontainer
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:5000/health || exit 1
+
+# Jalankan proses dengan non-root user bawaan Alpine
+USER node
 
 # Jalankan server
 CMD ["node", "server.js"]

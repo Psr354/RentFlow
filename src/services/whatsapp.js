@@ -19,6 +19,7 @@ const {
 } = require('../utils/parser');
 const { getUnifiedTransactions, getTraceFundAnalytics } = require('./tracefund');
 const { allocatePaymentFIFO, findTargetInvoiceForRoom, findPaidInvoiceForRoom } = require('./billing');
+const { createAuthToken } = require('../utils/security');
 
 let makeWASocket, useMultiFileAuthState, DisconnectReason;
 let QRCode;
@@ -957,12 +958,13 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
     const eksporMatch = trimmed.match(/^#?(?:ekspor|csv)(?:\s+(.+))?$/i);
     if (eksporMatch) {
         const rawArg = eksporMatch[1] ? eksporMatch[1].trim() : '';
-        let exportUrl = `${settings.base_url || 'https://sekeluarga.web.id'}/api/tracefund/export-csv`;
+        const token = createAuthToken('wa-export');
+        let exportUrl = `${settings.base_url || 'https://sekeluarga.web.id'}/api/tracefund/export-csv?token=${encodeURIComponent(token)}`;
         let periodLabel = 'Seluruh Periode';
 
         if (rawArg) {
             const my = parseMonthYearInput(rawArg);
-            exportUrl += `?month=${my.monthKey}`;
+            exportUrl += `&month=${my.monthKey}`;
             periodLabel = formatMonthKey(my.monthKey);
         }
 

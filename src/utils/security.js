@@ -11,6 +11,45 @@ if (!JWT_SECRET) {
     setSetting('jwt_secret', JWT_SECRET);
 }
 
+// Rahasia Webhook WhatsApp Eksternal
+let WA_WEBHOOK_SECRET = process.env.WA_WEBHOOK_SECRET || getSettings().wa_webhook_secret;
+if (!WA_WEBHOOK_SECRET) {
+    WA_WEBHOOK_SECRET = crypto.randomBytes(24).toString('hex');
+    setSetting('wa_webhook_secret', WA_WEBHOOK_SECRET);
+}
+
+function verifyWebhookSecret(req) {
+    let incomingSecret = null;
+    if (req.headers && req.headers['x-webhook-secret']) {
+        incomingSecret = String(req.headers['x-webhook-secret']).trim();
+    }
+    if (!incomingSecret && req.url) {
+        try {
+            const parsedUrl = new URL(req.url, 'http://localhost');
+            incomingSecret = parsedUrl.searchParams.get('secret');
+        } catch (_) {}
+    }
+    if (!incomingSecret) return false;
+    const bIncoming = Buffer.from(incomingSecret);
+    const bExpected = Buffer.from(WA_WEBHOOK_SECRET);
+    if (bIncoming.length !== bExpected.length) return false;
+    return crypto.timingSafeEqual(bIncoming, bExpected);
+}
+
+function getClientIp(req) {
+    const trustProxy = process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true';
+    if (trustProxy && req.headers) {
+        const xff = req.headers['x-forwarded-for'];
+        if (xff) {
+            const first = String(xff).split(',')[0].trim();
+            if (first) return first;
+        }
+        const realIp = req.headers['x-real-ip'];
+        if (realIp) return String(realIp).trim();
+    }
+    return req.socket?.remoteAddress || 'unknown';
+}
+
 function createAuthToken(username) {
     const payload = JSON.stringify({ u: username, exp: Date.now() + (14 * 24 * 60 * 60 * 1000) });
     const b64 = Buffer.from(payload).toString('base64url');
@@ -186,6 +225,9 @@ function serveStaticFile(res, filePath, contentType) {
 
 module.exports = {
     JWT_SECRET,
+    WA_WEBHOOK_SECRET,
+    verifyWebhookSecret,
+    getClientIp,
     createAuthToken,
     tokens,
     isAuthed,

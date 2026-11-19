@@ -95,40 +95,47 @@ function allocatePaymentFIFO({ roomId, amount, paymentMethod = 'TRANSFER', payme
     const allocations = [];
     const timestamp = new Date().toISOString();
 
-    for (let idx = 0; idx < unpaidInvoices.length; idx++) {
-        if (pool <= 0) break;
-        const inv = unpaidInvoices[idx];
-        const needed = inv.remaining_amount;
-        if (needed <= 0) continue;
+    db.exec('BEGIN IMMEDIATE;');
+    try {
+        for (let idx = 0; idx < unpaidInvoices.length; idx++) {
+            if (pool <= 0) break;
+            const inv = unpaidInvoices[idx];
+            const needed = inv.remaining_amount;
+            if (needed <= 0) continue;
 
-        const portion = Math.min(pool, needed);
-        pool -= portion;
+            const portion = Math.min(pool, needed);
+            pool -= portion;
 
-        const payId = `PAY-${Date.now()}-${idx + 1}`;
-        const noteStr = notes 
-            ? `${notes} (FIFO: ${inv.month_year})`
-            : `Alokasi FIFO tunggakan terlama (${inv.month_year})`;
+            const payId = `PAY-${Date.now()}-${idx + 1}`;
+            const noteStr = notes 
+                ? `${notes} (FIFO: ${inv.month_year})`
+                : `Alokasi FIFO tunggakan terlama (${inv.month_year})`;
 
-        db.prepare(`
-            INSERT INTO invoice_payments (id, invoice_id, amount, payment_method, payment_date, notes, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(payId, inv.id, portion, payMethod, payDate, noteStr, timestamp);
+            db.prepare(`
+                INSERT INTO invoice_payments (id, invoice_id, amount, payment_method, payment_date, notes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(payId, inv.id, portion, payMethod, payDate, noteStr, timestamp);
 
-        const newStatus = recalculateInvoiceStatus(inv.id);
-        allocations.push({
-            invoice_id: inv.id,
-            month_year: inv.month_year,
-            allocated_amount: portion,
-            new_status: newStatus.status,
-            remaining_amount: newStatus.remaining_amount
-        });
-    }
-
-    if (targetInvoiceId) {
-        const target = db.prepare('SELECT status FROM invoices WHERE id = ?').get(targetInvoiceId);
-        if (target && target.status === 'MENUNGGU_VERIFIKASI') {
-            recalculateInvoiceStatus(targetInvoiceId, true);
+            const newStatus = recalculateInvoiceStatus(inv.id);
+            allocations.push({
+                invoice_id: inv.id,
+                month_year: inv.month_year,
+                allocated_amount: portion,
+                new_status: newStatus.status,
+                remaining_amount: newStatus.remaining_amount
+            });
         }
+
+        if (targetInvoiceId) {
+            const target = db.prepare('SELECT status FROM invoices WHERE id = ?').get(targetInvoiceId);
+            if (target && target.status === 'MENUNGGU_VERIFIKASI') {
+                recalculateInvoiceStatus(targetInvoiceId, true);
+            }
+        }
+        db.exec('COMMIT;');
+    } catch (err) {
+        db.exec('ROLLBACK;');
+        throw err;
     }
 
     let message = '';
