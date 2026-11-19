@@ -293,38 +293,240 @@ async function testTraceFundCommands() {
 
     // 10. Pengujian Kesiapan Produksi (Healthcheck, Security Headers, PRAGMA)
     const { server: appServer } = require('../server.js');
-    await new Promise((resolve, reject) => {
-        appServer.listen(0, '127.0.0.1', () => {
-            const port = appServer.address().port;
-            const req = http.get(`http://127.0.0.1:${port}/health`, (res) => {
-                assert.strictEqual(res.statusCode, 200, '/health harus mengembalikan status 200');
-                assert.strictEqual(res.headers['x-content-type-options'], 'nosniff', 'Header nosniff harus aktif');
-                assert.strictEqual(res.headers['x-frame-options'], 'SAMEORIGIN', 'Header X-Frame-Options harus SAMEORIGIN');
-                assert.strictEqual(res.headers['referrer-policy'], 'strict-origin-when-cross-origin', 'Header Referrer-Policy harus aktif');
+    const { createAuthToken, tokens } = require('../src/utils/security.js');
+    const authToken = createAuthToken('admin');
+    tokens.set(authToken, Date.now() + 60000);
 
-                let raw = '';
-                res.on('data', chunk => raw += chunk);
+    function makeRequest(port, method, reqPath, data = null) {
+        return new Promise((resolve, reject) => {
+            const payload = data ? JSON.stringify(data) : null;
+            const req = http.request({
+                hostname: '127.0.0.1',
+                port,
+                method,
+                path: reqPath,
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json',
+                    ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+                }
+            }, (res) => {
+                let body = '';
+                res.on('data', chunk => body += chunk);
                 res.on('end', () => {
-                    const json = JSON.parse(raw);
-                    assert.strictEqual(json.status, 'UP', 'Status healthcheck harus UP');
-                    assert.strictEqual(json.database, 'CONNECTED', 'Database harus CONNECTED');
-
-                    // Cek PRAGMA synchronous & journal_mode
-                    const jm = appDb.prepare('PRAGMA journal_mode;').get();
-                    assert.strictEqual(jm.journal_mode, 'wal', 'SQLite journal_mode harus WAL');
-                    const sync = appDb.prepare('PRAGMA synchronous;').get();
-                    assert.strictEqual(sync.synchronous, 1, 'SQLite synchronous harus NORMAL (1)');
-
-                    appServer.close(resolve);
+                    let parsed = null;
+                    try { parsed = JSON.parse(body); } catch (_) { parsed = body; }
+                    resolve({ statusCode: res.statusCode, headers: res.headers, body: parsed });
                 });
             });
-            req.on('error', (err) => {
+            req.on('error', reject);
+            if (payload) req.write(payload);
+            req.end();
+        });
+    }
+
+    await new Promise((resolve, reject) => {
+        appServer.listen(0, '127.0.0.1', async () => {
+            const port = appServer.address().port;
+            try {
+                // 10.1 Healthcheck & Security Headers
+                const resHealth = await makeRequest(port, 'GET', '/health');
+                assert.strictEqual(resHealth.statusCode, 200, '/health harus mengembalikan status 200');
+                assert.strictEqual(resHealth.headers['x-content-type-options'], 'nosniff', 'Header nosniff harus aktif');
+                assert.strictEqual(resHealth.headers['x-frame-options'], 'SAMEORIGIN', 'Header X-Frame-Options harus SAMEORIGIN');
+                assert.strictEqual(resHealth.headers['referrer-policy'], 'strict-origin-when-cross-origin', 'Header Referrer-Policy harus aktif');
+                assert.strictEqual(resHealth.body.status, 'UP', 'Status healthcheck harus UP');
+                assert.strictEqual(resHealth.body.database, 'CONNECTED', 'Database harus CONNECTED');
+
+                // Cek PRAGMA synchronous & journal_mode
+                const jm = appDb.prepare('PRAGMA journal_mode;').get();
+                assert.strictEqual(jm.journal_mode, 'wal', 'SQLite journal_mode harus WAL');
+                const sync = appDb.prepare('PRAGMA synchronous;').get();
+                assert.strictEqual(sync.synchronous, 1, 'SQLite synchronous harus NORMAL (1)');
+
+                // 11. Pengujian Lengkap Fitur CRUD (Rooms, Invoices, Payments, Expenses, Incomes, Budgets, Complaints)
+                // 11.1 Rooms CRUD
+                const testRoomId = 'test-room-crud';
+                const postRoom = await makeRequest(port, 'POST', '/api/rooms', {
+                    id: testRoomId,
+                    number: '99.Z',
+                    type: 'VIP Test',
+                    price: 2000000,
+                    status: 'KOSONG',
+                    due_day: 5
+                });
+                assert.strictEqual(postRoom.statusCode, 200);
+
+                const putRoom = await makeRequest(port, 'PUT', `/api/rooms/${testRoomId}`, {
+                    price: 2500000,
+                    status: 'TERISI',
+                    tenant_name: 'Tester CRUD'
+                });
+                assert.strictEqual(putRoom.statusCode, 200);
+                assert.strictEqual(putRoom.body.success, true);
+                const checkRoom = appDb.prepare('SELECT * FROM rooms WHERE id = ?').get(testRoomId);
+                assert.strictEqual(checkRoom.price, 2500000);
+                assert.strictEqual(checkRoom.tenant_name, 'Tester CRUD');
+
+                // 11.2 Invoices & Payments CRUD
+                const testInvId = 'test-inv-crud';
+                const postInv = await makeRequest(port, 'POST', '/api/invoices', {
+                    id: testInvId,
+                    room_id: testRoomId,
+                    month_year: 'Desember 2026',
+                    amount: 2500000,
+                    due_date: '2026-12-05'
+                });
+                assert.strictEqual(postInv.statusCode, 200);
+
+                // PUT invoice
+                const putInv = await makeRequest(port, 'PUT', `/api/invoices/${testInvId}`, {
+                    amount: 3000000,
+                    notes: 'Penyesuaian tarif akhir tahun'
+                });
+                assert.strictEqual(putInv.statusCode, 200);
+                assert.strictEqual(putInv.body.success, true);
+                const checkInv = appDb.prepare('SELECT * FROM invoices WHERE id = ?').get(testInvId);
+                assert.strictEqual(checkInv.amount, 3000000);
+                assert.strictEqual(checkInv.notes, 'Penyesuaian tarif akhir tahun');
+
+                // Add Payment / Cicilan
+                const payRes = await makeRequest(port, 'POST', `/api/invoices/${testInvId}/pay`, {
+                    amount: 1000000,
+                    payment_method: 'TRANSFER',
+                    notes: 'Cicilan 1'
+                });
+                assert.strictEqual(payRes.statusCode, 200);
+
+                // GET Payments
+                const getPayments = await makeRequest(port, 'GET', `/api/invoices/${testInvId}/payments`);
+                assert.strictEqual(getPayments.statusCode, 200);
+                assert(getPayments.body.payments.length > 0);
+                const paymentId = getPayments.body.payments[0].id;
+
+                // PUT Payment
+                const putPay = await makeRequest(port, 'PUT', `/api/invoices/${testInvId}/payments/${paymentId}`, {
+                    amount: 1500000,
+                    notes: 'Cicilan 1 direvisi'
+                });
+                assert.strictEqual(putPay.statusCode, 200);
+                const checkPay = appDb.prepare('SELECT * FROM invoice_payments WHERE id = ?').get(paymentId);
+                assert.strictEqual(checkPay.amount, 1500000);
+                assert.strictEqual(checkPay.notes, 'Cicilan 1 direvisi');
+
+                // DELETE Payment
+                const delPay = await makeRequest(port, 'DELETE', `/api/invoices/${testInvId}/payments/${paymentId}`);
+                assert.strictEqual(delPay.statusCode, 200);
+                const checkPayAfterDel = appDb.prepare('SELECT * FROM invoice_payments WHERE id = ?').get(paymentId);
+                assert.strictEqual(checkPayAfterDel, undefined);
+
+                // DELETE Invoice
+                const delInv = await makeRequest(port, 'DELETE', `/api/invoices/${testInvId}`);
+                assert.strictEqual(delInv.statusCode, 200);
+
+                // DELETE Room
+                const delRoom = await makeRequest(port, 'DELETE', `/api/rooms/${testRoomId}`);
+                assert.strictEqual(delRoom.statusCode, 200);
+
+                // 11.3 Expenses CRUD
+                const testExpId = 'test-exp-crud';
+                const postExp = await makeRequest(port, 'POST', '/api/expenses', {
+                    id: testExpId,
+                    date: '2026-11-19',
+                    category: 'Listrik',
+                    amount: 100000,
+                    note: 'Token pompa tes'
+                });
+                assert.strictEqual(postExp.statusCode, 200);
+
+                const putExp = await makeRequest(port, 'PUT', `/api/expenses/${testExpId}`, {
+                    amount: 125000,
+                    note: 'Token pompa tes revisi'
+                });
+                assert.strictEqual(putExp.statusCode, 200);
+                const checkExp = appDb.prepare('SELECT * FROM expenses WHERE id = ?').get(testExpId);
+                assert.strictEqual(checkExp.amount, 125000);
+                assert.strictEqual(checkExp.note, 'Token pompa tes revisi');
+
+                const delExp = await makeRequest(port, 'DELETE', `/api/expenses/${testExpId}`);
+                assert.strictEqual(delExp.statusCode, 200);
+
+                // 11.4 General Incomes CRUD
+                const testIncId = 'test-inc-crud';
+                const postInc = await makeRequest(port, 'POST', '/api/incomes', {
+                    id: testIncId,
+                    date: '2026-11-19',
+                    category: 'Pemasukan',
+                    amount: 300000,
+                    note: 'Penjualan besi bekas'
+                });
+                assert.strictEqual(postInc.statusCode, 201);
+
+                const putInc = await makeRequest(port, 'PUT', `/api/incomes/${testIncId}`, {
+                    amount: 350000,
+                    note: 'Penjualan besi & kardus bekas'
+                });
+                assert.strictEqual(putInc.statusCode, 200);
+                const checkInc = appDb.prepare('SELECT * FROM general_incomes WHERE id = ?').get(testIncId);
+                assert.strictEqual(checkInc.amount, 350000);
+                assert.strictEqual(checkInc.note, 'Penjualan besi & kardus bekas');
+
+                const delInc = await makeRequest(port, 'DELETE', `/api/incomes/${testIncId}`);
+                assert.strictEqual(delInc.statusCode, 200);
+
+                // 11.5 Budgets CRUD
+                const testBudMonth = '2099-01';
+                const postBud = await makeRequest(port, 'POST', '/api/budgets', {
+                    month: testBudMonth,
+                    amount: 5000000
+                });
+                assert.strictEqual(postBud.statusCode, 200);
+
+                const getBud = await makeRequest(port, 'GET', `/api/budgets?month=${testBudMonth}`);
+                assert.strictEqual(getBud.statusCode, 200);
+                assert.strictEqual(getBud.body.amount, 5000000);
+
+                const delBud = await makeRequest(port, 'DELETE', `/api/budgets?month=${testBudMonth}`);
+                assert.strictEqual(delBud.statusCode, 200);
+                const checkBud = appDb.prepare('SELECT * FROM budgets WHERE month = ?').get(testBudMonth);
+                assert.strictEqual(checkBud, undefined);
+
+                // 11.6 Complaints CRUD
+                const testCmpId = 'test-cmp-crud';
+                const postCmp = await makeRequest(port, 'POST', '/api/complaints', {
+                    id: testCmpId,
+                    room_id: 'unit-dummy',
+                    tenant_name: 'Penghuni Tes',
+                    tenant_phone: '08123456789',
+                    category: 'Fasilitas',
+                    description: 'Pintu pagar macet',
+                    status: 'BARU'
+                });
+                assert.strictEqual(postCmp.statusCode, 201);
+
+                const putCmp = await makeRequest(port, 'PUT', `/api/complaints/${testCmpId}`, {
+                    status: 'DIPROSES',
+                    admin_notes: 'Tukang sedang menuju lokasi'
+                });
+                assert.strictEqual(putCmp.statusCode, 200);
+                const checkCmp = appDb.prepare('SELECT * FROM complaints WHERE id = ?').get(testCmpId);
+                assert.strictEqual(checkCmp.status, 'DIPROSES');
+                assert.strictEqual(checkCmp.admin_notes, 'Tukang sedang menuju lokasi');
+
+                const delCmp = await makeRequest(port, 'DELETE', `/api/complaints/${testCmpId}`);
+                assert.strictEqual(delCmp.statusCode, 200);
+                const checkCmpAfterDel = appDb.prepare('SELECT * FROM complaints WHERE id = ?').get(testCmpId);
+                assert.strictEqual(checkCmpAfterDel, undefined);
+
+                appServer.close(resolve);
+            } catch (err) {
                 appServer.close(() => reject(err));
-            });
+            }
         });
     });
 
-    console.log('✓ [10/10] Kesiapan Produksi tervalidasi (Healthcheck, Security Headers, WAL Checkpoint, & Indexes).');
+    console.log('✓ [10/11] Kesiapan Produksi tervalidasi (Healthcheck, Security Headers, WAL Checkpoint, & Indexes).');
+    console.log('✓ [11/11] Seluruh Operasi CRUD (Rooms, Invoices, Payments, Expenses, Incomes, Budgets, Complaints) tervalidasi 100%.');
 
     // Bersihkan test DB
     if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);

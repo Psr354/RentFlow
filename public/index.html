@@ -543,11 +543,17 @@
                             <h3 class="text-base font-bold text-slate-900">Catatan Pengeluaran & Biaya Operasional</h3>
                             <p class="text-xs text-slate-500">Catat biaya listrik fasilitas umum, air, perbaikan pompa, sampah, dan telusuri transaksi</p>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button type="button" onclick="exportTraceFundCsv()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-slate-200 transition" title="Unduh CSV Transaksi Lengkap ber-Saldo Berjalan">
-                                <i data-lucide="download" class="w-4 h-4"></i> Ekspor CSV (TraceFund)
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" onclick="exportTraceFundCsv()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-slate-200 transition" title="Unduh CSV Transaksi Lengkap ber-Saldo Berjalan">
+                                <i data-lucide="download" class="w-4 h-4"></i> Ekspor CSV
                             </button>
-                            <button type="button" onclick="openAnalyticsModal()" class="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-purple-200 transition">
+                            <button type="button" onclick="openBudgetModal()" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-amber-200 transition" title="Kelola Batas Anggaran Bulanan">
+                                <i data-lucide="wallet" class="w-4 h-4"></i> Anggaran
+                            </button>
+                            <button type="button" onclick="openIncomesModal()" class="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-emerald-200 transition" title="Kelola Pemasukan Kas Non-Sewa">
+                                <i data-lucide="arrow-down-left" class="w-4 h-4"></i> Pemasukan Kas
+                            </button>
+                            <button type="button" onclick="openAnalyticsModal()" class="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-purple-200 transition">
                                 <i data-lucide="bar-chart-2" class="w-4 h-4"></i> Analisis Bulanan
                             </button>
                             <button onclick="openExpenseModal()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
@@ -610,8 +616,11 @@
                             <p class="text-xs text-slate-500">Pantau keluhan fasilitas dari penghuni dan koordinasikan perbaikan via WhatsApp</p>
                         </div>
                         <div class="flex items-center gap-2">
+                            <button onclick="openComplaintAdminModal()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
+                                <i data-lucide="plus" class="w-4 h-4"></i> Catat Keluhan
+                            </button>
                             <a href="/keluhan.html" target="_blank" class="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-amber-200 transition">
-                                <i data-lucide="external-link" class="w-4 h-4"></i> Buka Portal Keluhan Publik
+                                <i data-lucide="external-link" class="w-4 h-4"></i> Portal Publik
                             </a>
                             <button onclick="loadComplaints()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
                                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Segarkan
@@ -1066,7 +1075,7 @@
     <!-- MODAL 4: CATAT PENGELUARAN -->
     <div id="modal-expense" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-slate-100 space-y-4">
-            <h3 class="text-sm font-bold text-slate-900">Catat Pengeluaran Baru</h3>
+            <h3 id="modal-expense-title" class="text-sm font-bold text-slate-900">Catat Pengeluaran Baru</h3>
             <form onsubmit="handleSaveExpense(event)" class="space-y-3">
                 <input type="hidden" id="form-expense-id">
                 <div>
@@ -1352,6 +1361,231 @@
         </div>
     </div>
 
+    <!-- MODAL 10: EDIT CICILAN / PEMBAYARAN -->
+    <div id="modal-edit-payment" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900">Edit Catatan Pembayaran</h3>
+                    <p class="text-xs text-slate-500">Perbarui nominal, metode, tanggal, atau catatan</p>
+                </div>
+                <button type="button" onclick="closeEditPaymentModal()" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form onsubmit="handleSaveEditPayment(event)" class="space-y-3">
+                <input type="hidden" id="edit-payment-id">
+                <input type="hidden" id="edit-payment-inv-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal Pembayaran *</label>
+                    <input type="date" id="edit-payment-date" required class="w-full px-3.5 py-2 border rounded-xl text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Nominal Pembayaran (Rp) *</label>
+                    <input type="text" id="edit-payment-amount" inputmode="numeric" required class="w-full px-3.5 py-2 border rounded-xl text-xs font-bold text-slate-900">
+                    <p id="edit-payment-amount-preview" class="text-[11px] font-bold text-emerald-600 mt-1">Rp 0</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Metode Pembayaran</label>
+                    <select id="edit-payment-method" class="w-full px-3.5 py-2 border rounded-xl text-xs font-semibold">
+                        <option value="TRANSFER">Transfer Bank</option>
+                        <option value="TUNAI">Tunai / Cash</option>
+                        <option value="QRIS">QRIS</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Keterangan / Catatan</label>
+                    <input type="text" id="edit-payment-notes" placeholder="Contoh: Cicilan ke-1 via BCA" class="w-full px-3.5 py-2 border rounded-xl text-xs">
+                </div>
+                <div class="pt-3 border-t flex justify-end gap-2">
+                    <button type="button" onclick="closeEditPaymentModal()" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs">Simpan Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 11: KELOLA ANGGARAN BULANAN (TRACEFUND) -->
+    <div id="modal-budgets" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 w-full max-w-xl shadow-2xl border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900">Kelola Anggaran Operasional</h3>
+                    <p class="text-xs text-slate-500">Atur, perbarui, atau hapus batas anggaran pengeluaran bulanan</p>
+                </div>
+                <button type="button" onclick="closeBudgetModal()" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Form Set Anggaran -->
+            <form onsubmit="handleSaveBudget(event)" class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Bulan (YYYY-MM) *</label>
+                        <input type="month" id="form-budget-month" required class="w-full px-3.5 py-2 border rounded-xl text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Nominal Anggaran (Rp) *</label>
+                        <input type="text" id="form-budget-amount" inputmode="numeric" required placeholder="Contoh: 1.000.000" class="w-full px-3.5 py-2 border rounded-xl text-xs font-bold bg-white">
+                        <p id="form-budget-amount-preview" class="text-[11px] font-bold text-amber-700 mt-1">Rp 0</p>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" onclick="resetBudgetForm()" class="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg">Reset</button>
+                    <button type="submit" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs">Simpan Anggaran</button>
+                </div>
+            </form>
+
+            <!-- Tabel Daftar Anggaran -->
+            <div class="max-h-60 overflow-y-auto rounded-2xl border border-slate-200/80 overflow-hidden">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-50 border-b text-[11px] font-bold text-slate-500 uppercase">
+                            <th class="py-2.5 px-3">Bulan</th>
+                            <th class="py-2.5 px-3 text-right">Anggaran</th>
+                            <th class="py-2.5 px-3 text-right">Terpakai</th>
+                            <th class="py-2.5 px-3 text-center">Status</th>
+                            <th class="py-2.5 px-3 text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="budgets-table-tbody" class="divide-y divide-slate-100">
+                        <!-- dynamic -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 12: KELOLA PEMASUKAN KAS (NON-SEWA) -->
+    <div id="modal-incomes" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 w-full max-w-2xl shadow-2xl border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900">Kelola Pemasukan Kas (Non-Sewa)</h3>
+                    <p class="text-xs text-slate-500">Catat pemasukan di luar sewa kamar (penjualan barang bekas, bunga, titipan, dll)</p>
+                </div>
+                <button type="button" onclick="closeIncomesModal()" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Form Pemasukan -->
+            <form onsubmit="handleSaveIncome(event)" class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <input type="hidden" id="form-income-id">
+                <div class="flex items-center justify-between">
+                    <span id="form-income-mode-label" class="text-xs font-bold text-slate-700">Tambah Pemasukan Baru</span>
+                    <button type="button" id="btn-cancel-edit-income" onclick="resetIncomeForm()" class="hidden text-xs text-rose-600 hover:underline">Batal Edit</button>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal *</label>
+                        <input type="date" id="form-income-date" required class="w-full px-3 py-2 border rounded-xl text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Kategori *</label>
+                        <input type="text" id="form-income-category" required placeholder="Contoh: Pemasukan" class="w-full px-3 py-2 border rounded-xl text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Nominal (Rp) *</label>
+                        <input type="text" id="form-income-amount" inputmode="numeric" required placeholder="Contoh: 250.000" class="w-full px-3 py-2 border rounded-xl text-xs font-bold bg-white">
+                        <p id="form-income-amount-preview" class="text-[11px] font-bold text-emerald-600 mt-1">Rp 0</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Keterangan / Sumber Pemasukan</label>
+                    <input type="text" id="form-income-note" placeholder="Contoh: Jual AC bekas kamar A, bonus bank, dll" class="w-full px-3 py-2 border rounded-xl text-xs bg-white">
+                </div>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="submit" id="btn-submit-income" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs">Simpan Pemasukan</button>
+                </div>
+            </form>
+
+            <!-- Tabel Pemasukan Non-Sewa -->
+            <div class="max-h-64 overflow-y-auto rounded-2xl border border-slate-200/80 overflow-hidden">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-50 border-b text-[11px] font-bold text-slate-500 uppercase">
+                            <th class="py-2.5 px-3">Tanggal</th>
+                            <th class="py-2.5 px-3">Kategori</th>
+                            <th class="py-2.5 px-3">Keterangan</th>
+                            <th class="py-2.5 px-3 text-right">Nominal</th>
+                            <th class="py-2.5 px-3 text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="incomes-table-tbody" class="divide-y divide-slate-100">
+                        <!-- dynamic -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 13: TAMBAH & EDIT KELUHAN ADMIN -->
+    <div id="modal-complaint-admin" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 id="modal-complaint-admin-title" class="text-sm font-bold text-slate-900">Tambah Keluhan Penghuni</h3>
+                    <p class="text-xs text-slate-500">Catat keluhan kerusakan atau update status perbaikan</p>
+                </div>
+                <button type="button" onclick="closeComplaintAdminModal()" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form onsubmit="handleSaveComplaintAdmin(event)" class="space-y-3">
+                <input type="hidden" id="form-complaint-id">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Unit *</label>
+                        <select id="form-complaint-room" required class="w-full px-3 py-2 border rounded-xl text-xs font-semibold"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Kategori Masalah *</label>
+                        <select id="form-complaint-category" required class="w-full px-3 py-2 border rounded-xl text-xs">
+                            <option value="Fasilitas">Fasilitas / Bangunan</option>
+                            <option value="Air">Air PAM / Keran / Sanyo</option>
+                            <option value="Listrik">Listrik / Stop Kontak / Lampu</option>
+                            <option value="Kebersihan">Kebersihan / Lingkungan</option>
+                            <option value="Keamanan">Keamanan & Kunci</option>
+                            <option value="Lainnya">Lainnya</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Pelapor</label>
+                        <input type="text" id="form-complaint-tenant" placeholder="Opsional (Otomatis dari unit)" class="w-full px-3 py-2 border rounded-xl text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">No. WhatsApp Pelapor</label>
+                        <input type="text" id="form-complaint-phone" placeholder="Contoh: 08123456789" class="w-full px-3 py-2 border rounded-xl text-xs font-mono">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Status Laporan</label>
+                    <select id="form-complaint-status" class="w-full px-3 py-2 border rounded-xl text-xs font-bold">
+                        <option value="BARU">BARU (Baru Masuk)</option>
+                        <option value="DIPROSES">DIPROSES (Sedang Dikerjakan)</option>
+                        <option value="SELESAI">SELESAI (Tuntas)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Deskripsi Keluhan / Masalah *</label>
+                    <textarea id="form-complaint-desc" rows="3" required placeholder="Jelaskan kerusakan secara detail..." class="w-full px-3 py-2 border rounded-xl text-xs"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Catatan Tindak Lanjut Admin</label>
+                    <input type="text" id="form-complaint-notes" placeholder="Contoh: Tukang sudah dipanggil, estimasi selesai sore" class="w-full px-3 py-2 border rounded-xl text-xs">
+                </div>
+                <div class="pt-3 border-t flex justify-end gap-2">
+                    <button type="button" onclick="closeComplaintAdminModal()" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs">Simpan Keluhan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         let currentTab = 'dashboard';
         let roomsData = [];
@@ -1370,6 +1604,16 @@
 
         function formatRupiah(num) {
             return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num || 0);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         const INDO_MONTHS = [
@@ -2248,6 +2492,9 @@
                             <a href="/tagihan.html?id=${inv.id}${inv.access_token ? `&token=${encodeURIComponent(inv.access_token)}` : ''}" target="_blank" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-xl text-xs flex items-center border border-slate-200/60 transition" title="Buka Link Tagihan Publik">
                                 <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
                             </a>
+                            <button type="button" onclick="editInvoice('${inv.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition" title="Edit Tagihan">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                            </button>
                             <button type="button" onclick="deleteInvoice('${inv.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition" title="Hapus Tagihan">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
@@ -2277,8 +2524,11 @@
                     <td class="py-3 px-4 font-bold text-slate-900">${e.category}</td>
                     <td class="py-3 px-4 text-slate-500">${displayNote}</td>
                     <td class="py-3 px-4 font-bold text-rose-600">${formatRupiah(e.amount)}</td>
-                    <td class="py-3 px-4 text-center">
-                        <button onclick="deleteExpense('${e.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded">
+                    <td class="py-3 px-4 text-center whitespace-nowrap">
+                        <button onclick="editExpense('${e.id}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded mr-1" title="Edit Pengeluaran">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="deleteExpense('${e.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded" title="Hapus Pengeluaran">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
                     </td>
@@ -2648,17 +2898,36 @@
             sel.innerHTML = roomsData.map(r => `<option value="${r.id}">${r.number} (${r.tenant_name || 'Kosong'})</option>`).join('');
             document.getElementById('form-invoice').reset();
             document.getElementById('form-invoice-id').value = '';
+            document.getElementById('form-invoice-amount-preview').innerText = 'Rp 0';
             document.getElementById('modal-invoice-title').innerText = 'Buat Tagihan Khusus';
             document.getElementById('modal-invoice').classList.remove('hidden');
         }
         function closeInvoiceModal() { document.getElementById('modal-invoice').classList.add('hidden'); }
 
+        function editInvoice(id) {
+            const inv = invoicesData.find(i => i.id === id);
+            if (!inv) return;
+            const sel = document.getElementById('form-invoice-room');
+            sel.innerHTML = roomsData.map(r => `<option value="${r.id}">${r.number} (${r.tenant_name || 'Kosong'})</option>`).join('');
+            sel.value = inv.room_id;
+            document.getElementById('form-invoice-id').value = inv.id;
+            document.getElementById('form-invoice-month').value = inv.month_year || '';
+            document.getElementById('form-invoice-amount').value = (inv.amount || 0).toLocaleString('id-ID');
+            document.getElementById('form-invoice-amount-preview').innerText = formatRupiah(inv.amount || 0);
+            document.getElementById('form-invoice-due').value = inv.due_date || '';
+            document.getElementById('form-invoice-status').value = inv.status || 'BELUM_BAYAR';
+            document.getElementById('form-invoice-notes').value = inv.notes || '';
+            document.getElementById('modal-invoice-title').innerText = `Edit Tagihan (${inv.id})`;
+            document.getElementById('modal-invoice').classList.remove('hidden');
+        }
+
         async function handleSaveInvoice(e) {
             e.preventDefault();
+            const invId = document.getElementById('form-invoice-id').value;
             const rawAmount = document.getElementById('form-invoice-amount').value;
             const amount = parseInt(String(rawAmount).replace(/[^0-9]/g, ''), 10) || 0;
             const payload = {
-                id: document.getElementById('form-invoice-id').value || undefined,
+                id: invId || undefined,
                 room_id: document.getElementById('form-invoice-room').value,
                 month_year: document.getElementById('form-invoice-month').value.trim(),
                 amount: amount,
@@ -2666,9 +2935,11 @@
                 status: document.getElementById('form-invoice-status').value,
                 notes: document.getElementById('form-invoice-notes').value.trim()
             };
+            const method = invId ? 'PUT' : 'POST';
+            const url = invId ? `/api/invoices/${invId}` : '/api/invoices';
             try {
-                const res = await fetch('/api/invoices', {
-                    method: 'POST',
+                const res = await fetch(url, {
+                    method: method,
                     headers: authHeaders(),
                     body: JSON.stringify(payload)
                 });
@@ -2679,7 +2950,7 @@
                 }
                 const d = await res.json().catch(() => ({}));
                 if (res.ok) {
-                    showToast(d.message || 'Tagihan berhasil disimpan');
+                    showToast(d.message || (invId ? 'Tagihan berhasil diperbarui' : 'Tagihan berhasil disimpan'));
                     closeInvoiceModal();
                     await loadAllData();
                 } else {
@@ -2975,7 +3246,10 @@
                             </td>
                             <td class="py-2.5 px-3 text-slate-600 max-w-[160px] truncate">${p.notes || '-'}</td>
                             <td class="py-2.5 px-3 text-right font-black text-emerald-600">${formatRupiah(p.amount)}</td>
-                            <td class="py-2.5 px-3 text-center">
+                            <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                                <button type="button" onclick="openEditPaymentModal('${inv.id}', '${p.id}', ${p.amount}, '${p.payment_method || 'TRANSFER'}', '${p.payment_date || ''}', '${escapeHtml(p.notes || '')}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded transition mr-1" title="Edit Entri Cicilan">
+                                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                </button>
                                 <button type="button" onclick="deletePaymentEntry('${inv.id}', '${p.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded transition" title="Hapus Entri Pembayaran">
                                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                 </button>
@@ -3014,6 +3288,54 @@
                 lucide.createIcons();
             } catch (err) {
                 tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-500">Gagal memuat data: ${err.message}</td></tr>`;
+            }
+        }
+
+        function openEditPaymentModal(invId, payId, amount, method, date, notes) {
+            document.getElementById('edit-payment-id').value = payId;
+            document.getElementById('edit-payment-inv-id').value = invId;
+            document.getElementById('edit-payment-amount').value = (amount || 0).toLocaleString('id-ID');
+            document.getElementById('edit-payment-amount-preview').innerText = formatRupiah(amount || 0);
+            document.getElementById('edit-payment-method').value = method || 'TRANSFER';
+            document.getElementById('edit-payment-date').value = date || '';
+            document.getElementById('edit-payment-notes').value = notes || '';
+            document.getElementById('modal-edit-payment').classList.remove('hidden');
+        }
+
+        function closeEditPaymentModal() {
+            document.getElementById('modal-edit-payment').classList.add('hidden');
+        }
+
+        async function handleSaveEditPayment(e) {
+            e.preventDefault();
+            const invId = document.getElementById('edit-payment-inv-id').value;
+            const payId = document.getElementById('edit-payment-id').value;
+            const rawAmount = document.getElementById('edit-payment-amount').value;
+            const amount = parseInt(String(rawAmount).replace(/[^0-9]/g, ''), 10) || 0;
+            const payload = {
+                amount,
+                payment_method: document.getElementById('edit-payment-method').value,
+                payment_date: document.getElementById('edit-payment-date').value,
+                notes: document.getElementById('edit-payment-notes').value.trim()
+            };
+            try {
+                const res = await fetch(`/api/invoices/${invId}/payments/${payId}`, {
+                    method: 'PUT',
+                    headers: authHeaders(),
+                    body: JSON.stringify(payload)
+                });
+                if (res.status === 401) { handleLogout(); return; }
+                const d = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    showToast(d.message || 'Pembayaran berhasil diperbarui');
+                    closeEditPaymentModal();
+                    await loadAllData();
+                    openInstallmentsModal(invId);
+                } else {
+                    showToast(d.message || 'Gagal memperbarui pembayaran', 'danger');
+                }
+            } catch (err) {
+                showToast('Kesalahan jaringan: ' + err.message, 'danger');
             }
         }
 
@@ -3182,24 +3504,48 @@
         function openExpenseModal() {
             document.getElementById('form-expense-id').value = '';
             document.getElementById('form-expense-date').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('form-expense-category').value = 'Listrik';
+            document.getElementById('form-expense-amount').value = '';
+            document.getElementById('form-expense-amount-preview').innerText = 'Rp 0';
+            document.getElementById('form-expense-note').value = '';
+            document.getElementById('modal-expense-title').innerText = 'Catat Pengeluaran Baru';
             document.getElementById('modal-expense').classList.remove('hidden');
         }
         function closeExpenseModal() { document.getElementById('modal-expense').classList.add('hidden'); }
 
+        function editExpense(id) {
+            const exp = expensesData.find(e => e.id === id);
+            if (!exp) return;
+            document.getElementById('form-expense-id').value = exp.id;
+            document.getElementById('form-expense-date').value = exp.date || '';
+            document.getElementById('form-expense-category').value = exp.category || 'Lainnya';
+            document.getElementById('form-expense-amount').value = (exp.amount || 0).toLocaleString('id-ID');
+            document.getElementById('form-expense-amount-preview').innerText = formatRupiah(exp.amount || 0);
+            const rawDesc = exp.description && exp.category
+                ? exp.description.replace(new RegExp('^' + exp.category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':\\s*', 'i'), '')
+                : (exp.description || '');
+            document.getElementById('form-expense-note').value = exp.note || rawDesc || '';
+            document.getElementById('modal-expense-title').innerText = 'Edit Pengeluaran';
+            document.getElementById('modal-expense').classList.remove('hidden');
+        }
+
         async function handleSaveExpense(e) {
             e.preventDefault();
+            const expId = document.getElementById('form-expense-id').value;
             const rawAmount = document.getElementById('form-expense-amount').value;
             const amount = parseInt(String(rawAmount).replace(/[^0-9]/g, ''), 10) || 0;
             const payload = {
-                id: document.getElementById('form-expense-id').value || undefined,
+                id: expId || undefined,
                 date: document.getElementById('form-expense-date').value,
                 category: document.getElementById('form-expense-category').value,
                 amount: amount,
                 note: document.getElementById('form-expense-note').value.trim()
             };
+            const method = expId ? 'PUT' : 'POST';
+            const url = expId ? `/api/expenses/${expId}` : '/api/expenses';
             try {
-                const res = await fetch('/api/expenses', {
-                    method: 'POST',
+                const res = await fetch(url, {
+                    method: method,
                     headers: authHeaders(),
                     body: JSON.stringify(payload)
                 });
@@ -3210,11 +3556,11 @@
                 }
                 const d = await res.json().catch(() => ({}));
                 if (res.ok) {
-                    showToast(d.message || 'Pengeluaran berhasil dicatat');
+                    showToast(d.message || (expId ? 'Pengeluaran berhasil diperbarui' : 'Pengeluaran berhasil dicatat'));
                     closeExpenseModal();
                     await loadAllData();
                 } else {
-                    showToast(d.message || 'Gagal mencatat pengeluaran', 'danger');
+                    showToast(d.message || 'Gagal menyimpan pengeluaran', 'danger');
                 }
             } catch (err) {
                 showToast('Gagal mencatat pengeluaran: ' + err.message, 'danger');
@@ -3490,6 +3836,9 @@
                                     Buka Lagi
                                 </button>
                             `}
+                            <button onclick="editComplaint('${c.id}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded-lg" title="Edit Laporan Keluhan">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                            </button>
                             <button onclick="deleteComplaint('${c.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded-lg" title="Hapus Laporan">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
@@ -3499,6 +3848,77 @@
                 `;
             }).join('');
             lucide.createIcons();
+        }
+
+        function openComplaintAdminModal() {
+            const sel = document.getElementById('form-complaint-room');
+            sel.innerHTML = roomsData.map(r => `<option value="${r.id}">${r.number} (${r.tenant_name || 'Kosong'})</option>`).join('');
+            document.getElementById('form-complaint-id').value = '';
+            document.getElementById('form-complaint-tenant').value = '';
+            document.getElementById('form-complaint-phone').value = '';
+            document.getElementById('form-complaint-category').value = 'Fasilitas';
+            document.getElementById('form-complaint-status').value = 'BARU';
+            document.getElementById('form-complaint-desc').value = '';
+            document.getElementById('form-complaint-notes').value = '';
+            document.getElementById('modal-complaint-admin-title').innerText = 'Tambah Keluhan Penghuni';
+            document.getElementById('modal-complaint-admin').classList.remove('hidden');
+        }
+
+        function closeComplaintAdminModal() {
+            document.getElementById('modal-complaint-admin').classList.add('hidden');
+        }
+
+        function editComplaint(id) {
+            const c = complaintsData.find(item => item.id === id);
+            if (!c) return;
+            const sel = document.getElementById('form-complaint-room');
+            sel.innerHTML = roomsData.map(r => `<option value="${r.id}">${r.number} (${r.tenant_name || 'Kosong'})</option>`).join('');
+            sel.value = c.room_id;
+            document.getElementById('form-complaint-id').value = c.id;
+            document.getElementById('form-complaint-tenant').value = c.tenant_name || '';
+            document.getElementById('form-complaint-phone').value = c.tenant_phone || '';
+            document.getElementById('form-complaint-category').value = c.category || 'Fasilitas';
+            document.getElementById('form-complaint-status').value = c.status || 'BARU';
+            document.getElementById('form-complaint-desc').value = c.description || '';
+            document.getElementById('form-complaint-notes').value = c.admin_notes || '';
+            document.getElementById('modal-complaint-admin-title').innerText = `Edit Keluhan (${c.room_number || ''})`;
+            document.getElementById('modal-complaint-admin').classList.remove('hidden');
+        }
+
+        async function handleSaveComplaintAdmin(e) {
+            e.preventDefault();
+            const id = document.getElementById('form-complaint-id').value;
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/complaints/${id}` : '/api/complaints';
+            const payload = {
+                room_id: document.getElementById('form-complaint-room').value,
+                tenant_name: document.getElementById('form-complaint-tenant').value.trim(),
+                tenant_phone: document.getElementById('form-complaint-phone').value.trim(),
+                category: document.getElementById('form-complaint-category').value,
+                status: document.getElementById('form-complaint-status').value,
+                description: document.getElementById('form-complaint-desc').value.trim(),
+                admin_notes: document.getElementById('form-complaint-notes').value.trim()
+            };
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers: authHeaders(),
+                    body: JSON.stringify(payload)
+                });
+                if (res.status === 401) { handleLogout(); return; }
+                const d = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    showToast(d.message || 'Keluhan berhasil disimpan');
+                    closeComplaintAdminModal();
+                    await loadComplaints();
+                    const stats = await fetch('/api/stats', { headers: authHeaders() }).then(r => r.json());
+                    renderDashboardStats(stats);
+                } else {
+                    showToast(d.message || 'Gagal menyimpan keluhan', 'danger');
+                }
+            } catch (err) {
+                showToast('Kesalahan jaringan: ' + err.message, 'danger');
+            }
         }
 
         async function updateComplaintStatus(id, newStatus) {
@@ -3534,6 +3954,256 @@
             }
         }
 
+        // ==========================================
+        // ANGGARAN (BUDGETS) MANAGEMENT
+        // ==========================================
+        let budgetsData = [];
+
+        async function openBudgetModal() {
+            document.getElementById('modal-budgets').classList.remove('hidden');
+            resetBudgetForm();
+            await loadBudgets();
+        }
+
+        function closeBudgetModal() {
+            document.getElementById('modal-budgets').classList.add('hidden');
+        }
+
+        function resetBudgetForm() {
+            document.getElementById('form-budget-month').value = new Date().toISOString().slice(0, 7);
+            document.getElementById('form-budget-amount').value = '';
+            document.getElementById('form-budget-amount-preview').innerText = 'Rp 0';
+        }
+
+        async function loadBudgets() {
+            const tbody = document.getElementById('budgets-table-tbody');
+            tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400 italic">Memuat anggaran...</td></tr>`;
+            try {
+                const res = await fetch('/api/budgets', { headers: authHeaders() });
+                if (res.status === 401) { handleLogout(); return; }
+                budgetsData = await res.json();
+                if (!Array.isArray(budgetsData) || budgetsData.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400 italic">Belum ada anggaran bulanan yang ditentukan.</td></tr>`;
+                    return;
+                }
+
+                const enriched = await Promise.all(budgetsData.map(async b => {
+                    try {
+                        const r = await fetch(`/api/budgets?month=${b.month}`, { headers: authHeaders() });
+                        if (r.ok) return await r.json();
+                    } catch (_) {}
+                    return { month: b.month, amount: b.amount, spent: 0, remaining: b.amount, percentage: 0 };
+                }));
+
+                tbody.innerHTML = enriched.map(b => {
+                    const pct = b.percentage || 0;
+                    const isOver = pct > 100;
+                    return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-2.5 px-3 font-bold text-slate-800">${b.month}</td>
+                        <td class="py-2.5 px-3 text-right font-black text-slate-900">${formatRupiah(b.amount)}</td>
+                        <td class="py-2.5 px-3 text-right font-semibold text-rose-600">${formatRupiah(b.spent)}</td>
+                        <td class="py-2.5 px-3 text-center">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isOver ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}">
+                                ${pct}% (${formatRupiah(b.remaining)} sisa)
+                            </span>
+                        </td>
+                        <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                            <button onclick="editBudgetRow('${b.month}', ${b.amount})" class="p-1 text-slate-400 hover:text-amber-600 rounded mr-1" title="Edit Anggaran">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button onclick="deleteBudgetRow('${b.month}')" class="p-1 text-slate-400 hover:text-rose-600 rounded" title="Hapus Anggaran">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    `;
+                }).join('');
+                lucide.createIcons();
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-500">Gagal memuat anggaran: ${err.message}</td></tr>`;
+            }
+        }
+
+        function editBudgetRow(month, amount) {
+            document.getElementById('form-budget-month').value = month;
+            document.getElementById('form-budget-amount').value = (amount || 0).toLocaleString('id-ID');
+            document.getElementById('form-budget-amount-preview').innerText = formatRupiah(amount || 0);
+            document.getElementById('form-budget-amount').focus();
+        }
+
+        async function handleSaveBudget(e) {
+            e.preventDefault();
+            const month = document.getElementById('form-budget-month').value;
+            const rawAmount = document.getElementById('form-budget-amount').value;
+            const amount = parseInt(String(rawAmount).replace(/[^0-9]/g, ''), 10) || 0;
+            try {
+                const res = await fetch('/api/budgets', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ month, amount })
+                });
+                if (res.status === 401) { handleLogout(); return; }
+                const d = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    showToast(d.message || 'Anggaran berhasil disimpan');
+                    resetBudgetForm();
+                    await loadBudgets();
+                } else {
+                    showToast(d.message || 'Gagal menyimpan anggaran', 'danger');
+                }
+            } catch (err) {
+                showToast('Kesalahan jaringan: ' + err.message, 'danger');
+            }
+        }
+
+        async function deleteBudgetRow(month) {
+            if (!confirm(`Hapus batas anggaran untuk bulan ${month}?`)) return;
+            try {
+                const res = await fetch(`/api/budgets?month=${encodeURIComponent(month)}`, {
+                    method: 'DELETE',
+                    headers: authHeaders()
+                });
+                if (res.ok) {
+                    showToast(`Anggaran ${month} berhasil dihapus`);
+                    await loadBudgets();
+                } else {
+                    showToast('Gagal menghapus anggaran', 'danger');
+                }
+            } catch (err) {
+                showToast('Gagal menghapus anggaran', 'danger');
+            }
+        }
+
+        // ==========================================
+        // GENERAL INCOMES (PEMASUKAN NON-SEWA) MANAGEMENT
+        // ==========================================
+        let incomesData = [];
+
+        async function openIncomesModal() {
+            document.getElementById('modal-incomes').classList.remove('hidden');
+            resetIncomeForm();
+            await loadIncomes();
+        }
+
+        function closeIncomesModal() {
+            document.getElementById('modal-incomes').classList.add('hidden');
+        }
+
+        function resetIncomeForm() {
+            document.getElementById('form-income-id').value = '';
+            document.getElementById('form-income-date').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('form-income-category').value = 'Pemasukan';
+            document.getElementById('form-income-amount').value = '';
+            document.getElementById('form-income-amount-preview').innerText = 'Rp 0';
+            document.getElementById('form-income-note').value = '';
+            document.getElementById('form-income-mode-label').innerText = 'Tambah Pemasukan Baru';
+            document.getElementById('btn-cancel-edit-income').classList.add('hidden');
+            document.getElementById('btn-submit-income').innerText = 'Simpan Pemasukan';
+        }
+
+        async function loadIncomes() {
+            const tbody = document.getElementById('incomes-table-tbody');
+            tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400 italic">Memuat pemasukan non-sewa...</td></tr>`;
+            try {
+                const res = await fetch('/api/incomes', { headers: authHeaders() });
+                if (res.status === 401) { handleLogout(); return; }
+                incomesData = await res.json();
+                if (!Array.isArray(incomesData) || incomesData.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400 italic">Belum ada catatan pemasukan kas non-sewa.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = incomesData.map(inc => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-2.5 px-3 font-medium text-slate-700">${inc.date}</td>
+                        <td class="py-2.5 px-3 font-bold text-slate-800">${inc.category || 'Pemasukan'}</td>
+                        <td class="py-2.5 px-3 text-slate-600 max-w-xs truncate">${inc.note || '-'}</td>
+                        <td class="py-2.5 px-3 text-right font-black text-emerald-600">${formatRupiah(inc.amount)}</td>
+                        <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                            <button onclick="editIncomeRow('${inc.id}')" class="p-1 text-slate-400 hover:text-emerald-600 rounded mr-1" title="Edit Pemasukan">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button onclick="deleteIncomeRow('${inc.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded" title="Hapus Pemasukan">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+                lucide.createIcons();
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-500">Gagal memuat pemasukan: ${err.message}</td></tr>`;
+            }
+        }
+
+        function editIncomeRow(id) {
+            const inc = incomesData.find(i => i.id === id);
+            if (!inc) return;
+            document.getElementById('form-income-id').value = inc.id;
+            document.getElementById('form-income-date').value = inc.date || '';
+            document.getElementById('form-income-category').value = inc.category || 'Pemasukan';
+            document.getElementById('form-income-amount').value = (inc.amount || 0).toLocaleString('id-ID');
+            document.getElementById('form-income-amount-preview').innerText = formatRupiah(inc.amount || 0);
+            document.getElementById('form-income-note').value = inc.note || '';
+            document.getElementById('form-income-mode-label').innerText = 'Edit Pemasukan Kas';
+            document.getElementById('btn-cancel-edit-income').classList.remove('hidden');
+            document.getElementById('btn-submit-income').innerText = 'Perbarui Pemasukan';
+            document.getElementById('form-income-amount').focus();
+        }
+
+        async function handleSaveIncome(e) {
+            e.preventDefault();
+            const id = document.getElementById('form-income-id').value;
+            const rawAmount = document.getElementById('form-income-amount').value;
+            const amount = parseInt(String(rawAmount).replace(/[^0-9]/g, ''), 10) || 0;
+            const payload = {
+                date: document.getElementById('form-income-date').value,
+                category: document.getElementById('form-income-category').value.trim() || 'Pemasukan',
+                amount: amount,
+                note: document.getElementById('form-income-note').value.trim()
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/incomes/${id}` : '/api/incomes';
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers: authHeaders(),
+                    body: JSON.stringify(payload)
+                });
+                if (res.status === 401) { handleLogout(); return; }
+                const d = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    showToast(d.message || 'Pemasukan berhasil disimpan');
+                    resetIncomeForm();
+                    await loadIncomes();
+                    await loadAllData();
+                } else {
+                    showToast(d.message || 'Gagal menyimpan pemasukan', 'danger');
+                }
+            } catch (err) {
+                showToast('Kesalahan jaringan: ' + err.message, 'danger');
+            }
+        }
+
+        async function deleteIncomeRow(id) {
+            if (!confirm('Hapus pemasukan non-sewa ini?')) return;
+            try {
+                const res = await fetch(`/api/incomes/${id}`, {
+                    method: 'DELETE',
+                    headers: authHeaders()
+                });
+                if (res.ok) {
+                    showToast('Pemasukan berhasil dihapus');
+                    await loadIncomes();
+                    await loadAllData();
+                } else {
+                    showToast('Gagal menghapus pemasukan', 'danger');
+                }
+            } catch (err) {
+                showToast('Gagal menghapus pemasukan', 'danger');
+            }
+        }
+
         function openComplaintPhotoModal(url, title) {
             document.getElementById('modal-complaint-img').src = url;
             document.getElementById('modal-complaint-title').innerText = 'Foto Kerusakan: ' + title;
@@ -3551,6 +4221,9 @@
             attachCurrencyLivePreview('form-expense-amount', 'form-expense-amount-preview');
             attachCurrencyLivePreview('form-invoice-amount', 'form-invoice-amount-preview');
             attachCurrencyLivePreview('form-room-price', 'form-room-price-preview');
+            attachCurrencyLivePreview('edit-payment-amount', 'edit-payment-amount-preview');
+            attachCurrencyLivePreview('form-budget-amount', 'form-budget-amount-preview');
+            attachCurrencyLivePreview('form-income-amount', 'form-income-amount-preview');
 
             if (sessionStorage.getItem('admin_token')) {
                 document.getElementById('login-screen').classList.add('hidden');
@@ -3570,6 +4243,10 @@
                 closeAnalyticsModal();
                 closePaymentModal();
                 closeInstallmentsModal();
+                closeEditPaymentModal();
+                closeBudgetModal();
+                closeIncomesModal();
+                closeComplaintAdminModal();
                 closeMobileMenu();
             }
         });

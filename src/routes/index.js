@@ -506,6 +506,45 @@ async function handleRequest(req, res) {
 
     if (pathname.startsWith('/api/rooms/')) {
         const id = decodeURIComponent(pathname.replace('/api/rooms/', ''));
+        if (req.method === 'PUT') {
+            readBody(req, res, (body) => {
+                try {
+                    const r = JSON.parse(body || '{}');
+                    const exist = db.prepare('SELECT * FROM rooms WHERE id = ?').get(id);
+                    if (!exist) return send(res, 404, { success: false, message: 'Unit tidak ditemukan' });
+
+                    db.prepare(`
+                        UPDATE rooms SET
+                            number = COALESCE(?, number),
+                            type = COALESCE(?, type),
+                            price = COALESCE(?, price),
+                            status = COALESCE(?, status),
+                            tenant_name = COALESCE(?, tenant_name),
+                            tenant_phone = COALESCE(?, tenant_phone),
+                            tenant_email = COALESCE(?, tenant_email),
+                            due_day = COALESCE(?, due_day),
+                            entry_date = COALESCE(?, entry_date)
+                        WHERE id = ?
+                    `).run(
+                        r.number || null,
+                        r.type || null,
+                        r.price !== undefined ? Number(r.price) : null,
+                        r.status || null,
+                        r.tenant_name !== undefined ? r.tenant_name : null,
+                        r.tenant_phone !== undefined ? r.tenant_phone : null,
+                        r.tenant_email !== undefined ? r.tenant_email : null,
+                        r.due_day !== undefined ? Number(r.due_day) : null,
+                        r.entry_date !== undefined ? r.entry_date : null,
+                        id
+                    );
+                    return send(res, 200, { success: true, message: 'Data unit berhasil diperbarui' });
+                } catch (err) {
+                    return send(res, 500, { success: false, message: err.message });
+                }
+            });
+            return;
+        }
+
         if (req.method === 'DELETE') {
             try {
                 const invRows = db.prepare('SELECT id FROM invoices WHERE room_id = ?').all(id);
@@ -591,6 +630,41 @@ async function handleRequest(req, res) {
             SELECT * FROM invoice_payments WHERE invoice_id = ? ORDER BY payment_date DESC, created_at DESC
         `).all(id);
         return send(res, 200, { success: true, payments });
+    }
+
+    if (req.method === 'PUT' && pathname.includes('/payments/') && pathname.startsWith('/api/invoices/')) {
+        const parts = pathname.replace('/api/invoices/', '').split('/payments/');
+        const invId = decodeURIComponent(parts[0]);
+        const payId = decodeURIComponent(parts[1]);
+        readBody(req, res, (body) => {
+            try {
+                const data = JSON.parse(body || '{}');
+                const exist = db.prepare('SELECT * FROM invoice_payments WHERE id = ? AND invoice_id = ?').get(payId, invId);
+                if (!exist) return send(res, 404, { success: false, message: 'Catatan pembayaran tidak ditemukan' });
+
+                db.prepare(`
+                    UPDATE invoice_payments SET
+                        amount = COALESCE(?, amount),
+                        payment_method = COALESCE(?, payment_method),
+                        payment_date = COALESCE(?, payment_date),
+                        notes = COALESCE(?, notes)
+                    WHERE id = ? AND invoice_id = ?
+                `).run(
+                    data.amount !== undefined ? Number(data.amount) : null,
+                    data.payment_method || null,
+                    data.payment_date || null,
+                    data.notes !== undefined ? data.notes : null,
+                    payId,
+                    invId
+                );
+
+                const resStatus = recalculateInvoiceStatus(invId);
+                return send(res, 200, { success: true, message: 'Catatan pembayaran cicilan berhasil diperbarui', ...resStatus });
+            } catch (err) {
+                return send(res, 500, { success: false, message: err.message });
+            }
+        });
+        return;
     }
 
     if (req.method === 'DELETE' && pathname.includes('/payments/') && pathname.startsWith('/api/invoices/')) {
@@ -744,8 +818,45 @@ async function handleRequest(req, res) {
         }
     }
 
-    if (pathname.startsWith('/api/invoices/')) {
+    if (pathname.startsWith('/api/invoices/') && !pathname.includes('/payments') && !pathname.includes('/pay') && !pathname.includes('/notify')) {
         const id = decodeURIComponent(pathname.replace('/api/invoices/', ''));
+        if (req.method === 'PUT') {
+            readBody(req, res, (body) => {
+                try {
+                    const inv = JSON.parse(body || '{}');
+                    const exist = db.prepare('SELECT * FROM invoices WHERE id = ?').get(id);
+                    if (!exist) return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
+
+                    db.prepare(`
+                        UPDATE invoices SET
+                            room_id = COALESCE(?, room_id),
+                            month_year = COALESCE(?, month_year),
+                            amount = COALESCE(?, amount),
+                            due_date = COALESCE(?, due_date),
+                            status = COALESCE(?, status),
+                            payment_method = COALESCE(?, payment_method),
+                            notes = COALESCE(?, notes)
+                        WHERE id = ?
+                    `).run(
+                        inv.room_id || null,
+                        inv.month_year || null,
+                        inv.amount !== undefined ? Number(inv.amount) : null,
+                        inv.due_date || null,
+                        inv.status || null,
+                        inv.payment_method !== undefined ? inv.payment_method : null,
+                        inv.notes !== undefined ? inv.notes : null,
+                        id
+                    );
+
+                    const updatedStatus = recalculateInvoiceStatus(id);
+                    return send(res, 200, { success: true, message: 'Tagihan berhasil diperbarui', invoice: updatedStatus });
+                } catch (err) {
+                    return send(res, 500, { success: false, message: err.message });
+                }
+            });
+            return;
+        }
+
         if (req.method === 'DELETE') {
             try {
                 db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(id);
@@ -798,6 +909,35 @@ async function handleRequest(req, res) {
 
     if (pathname.startsWith('/api/expenses/')) {
         const id = decodeURIComponent(pathname.replace('/api/expenses/', ''));
+        if (req.method === 'PUT') {
+            readBody(req, res, (body) => {
+                try {
+                    const exp = JSON.parse(body || '{}');
+                    const exist = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+                    if (!exist) return send(res, 404, { success: false, message: 'Pengeluaran tidak ditemukan' });
+
+                    db.prepare(`
+                        UPDATE expenses SET
+                            date = COALESCE(?, date),
+                            category = COALESCE(?, category),
+                            amount = COALESCE(?, amount),
+                            note = COALESCE(?, note)
+                        WHERE id = ?
+                    `).run(
+                        exp.date || null,
+                        exp.category || null,
+                        exp.amount !== undefined ? Number(exp.amount) : null,
+                        exp.note !== undefined ? exp.note : null,
+                        id
+                    );
+                    return send(res, 200, { success: true, message: 'Pengeluaran berhasil diperbarui' });
+                } catch (err) {
+                    return send(res, 500, { success: false, message: err.message });
+                }
+            });
+            return;
+        }
+
         if (req.method === 'DELETE') {
             db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
             return send(res, 200, { success: true, message: 'Pengeluaran berhasil dihapus' });
@@ -814,6 +954,33 @@ async function handleRequest(req, res) {
                 ORDER BY c.created_at DESC
             `).all();
             return send(res, 200, rows);
+        }
+
+        if (req.method === 'POST') {
+            readBody(req, res, (body) => {
+                try {
+                    const data = JSON.parse(body || '{}');
+                    const id = data.id || `CMP-${Date.now()}`;
+                    const room_id = data.room_id;
+                    const tenant_name = data.tenant_name || '';
+                    const tenant_phone = data.tenant_phone || '';
+                    const category = data.category || 'Fasilitas';
+                    const description = data.description || '';
+                    const status = data.status || 'BARU';
+                    const admin_notes = data.admin_notes || '';
+                    if (!room_id || !description) {
+                        return send(res, 400, { success: false, message: 'Unit dan deskripsi wajib diisi' });
+                    }
+                    db.prepare(`
+                        INSERT INTO complaints (id, room_id, tenant_name, tenant_phone, category, description, status, admin_notes, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).run(id, room_id, tenant_name, tenant_phone, category, description, status, admin_notes, new Date().toISOString());
+                    return send(res, 201, { success: true, id, message: 'Keluhan berhasil dicatat' });
+                } catch (err) {
+                    return send(res, 500, { success: false, message: err.message });
+                }
+            });
+            return;
         }
     }
 
@@ -838,10 +1005,53 @@ async function handleRequest(req, res) {
         }
     }
 
-    if (pathname.startsWith('/api/complaints/') && req.method === 'DELETE') {
+    if (pathname.startsWith('/api/complaints/') && !pathname.endsWith('/status')) {
         const id = decodeURIComponent(pathname.replace('/api/complaints/', ''));
-        db.prepare('DELETE FROM complaints WHERE id = ?').run(id);
-        return send(res, 200, { success: true, message: 'Keluhan berhasil dihapus' });
+        if (req.method === 'PUT') {
+            readBody(req, res, (body) => {
+                try {
+                    const c = JSON.parse(body || '{}');
+                    const exist = db.prepare('SELECT * FROM complaints WHERE id = ?').get(id);
+                    if (!exist) return send(res, 404, { success: false, message: 'Keluhan tidak ditemukan' });
+
+                    const resolvedAt = c.status === 'SELESAI'
+                        ? (exist.resolved_at || new Date().toISOString())
+                        : (c.status && c.status !== 'SELESAI' ? null : exist.resolved_at);
+
+                    db.prepare(`
+                        UPDATE complaints SET
+                            room_id = COALESCE(?, room_id),
+                            tenant_name = COALESCE(?, tenant_name),
+                            tenant_phone = COALESCE(?, tenant_phone),
+                            category = COALESCE(?, category),
+                            description = COALESCE(?, description),
+                            status = COALESCE(?, status),
+                            admin_notes = COALESCE(?, admin_notes),
+                            resolved_at = ?
+                        WHERE id = ?
+                    `).run(
+                        c.room_id || null,
+                        c.tenant_name !== undefined ? c.tenant_name : null,
+                        c.tenant_phone !== undefined ? c.tenant_phone : null,
+                        c.category || null,
+                        c.description || null,
+                        c.status || null,
+                        c.admin_notes !== undefined ? c.admin_notes : null,
+                        resolvedAt,
+                        id
+                    );
+                    return send(res, 200, { success: true, message: 'Data keluhan berhasil diperbarui' });
+                } catch (err) {
+                    return send(res, 500, { success: false, message: err.message });
+                }
+            });
+            return;
+        }
+
+        if (req.method === 'DELETE') {
+            db.prepare('DELETE FROM complaints WHERE id = ?').run(id);
+            return send(res, 200, { success: true, message: 'Keluhan berhasil dihapus' });
+        }
     }
 
     // 10. Settings API
@@ -1021,6 +1231,19 @@ async function handleRequest(req, res) {
         return send(res, 200, { success: true, month, amount, message: 'Anggaran berhasil diperbarui.' });
     }
 
+    if (pathname.startsWith('/api/budgets') && req.method === 'DELETE') {
+        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
+        let month = query.month;
+        if (!month && pathname.startsWith('/api/budgets/')) {
+            month = decodeURIComponent(pathname.replace('/api/budgets/', '')).trim();
+        }
+        if (!month) {
+            return send(res, 400, { success: false, message: 'Field month (YYYY-MM) wajib diisi untuk menghapus anggaran.' });
+        }
+        db.prepare('DELETE FROM budgets WHERE month = ?').run(month);
+        return send(res, 200, { success: true, month, message: `Anggaran bulan ${month} berhasil dihapus.` });
+    }
+
     // 13.6 General Incomes API (Pemasukan Non-Sewa)
     if (req.method === 'GET' && pathname === '/api/incomes') {
         if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
@@ -1049,7 +1272,7 @@ async function handleRequest(req, res) {
         if (isNaN(amount) || amount <= 0) {
             return send(res, 400, { success: false, message: 'Nominal pemasukan harus lebih besar dari 0.' });
         }
-        const id = `INC-${Date.now()}`;
+        const id = body.id || `INC-${Date.now()}`;
         const date = body.date || getTodayWIB();
         const category = body.category || 'Pemasukan';
         const note = body.note || '';
@@ -1058,6 +1281,43 @@ async function handleRequest(req, res) {
             VALUES (?, ?, ?, ?, ?, ?)
         `).run(id, date, category, amount, note, new Date().toISOString());
         return send(res, 201, { success: true, id, message: 'Pemasukan berhasil dicatat.' });
+    }
+
+    if (pathname.startsWith('/api/incomes/')) {
+        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
+        const id = decodeURIComponent(pathname.replace('/api/incomes/', ''));
+
+        if (req.method === 'PUT') {
+            let body;
+            try {
+                body = await parseJsonBody(req);
+            } catch (err) {
+                return send(res, 400, { success: false, message: 'Format data JSON tidak valid atau melebihi batas ukuran.' });
+            }
+            const exist = db.prepare('SELECT * FROM general_incomes WHERE id = ?').get(id);
+            if (!exist) return send(res, 404, { success: false, message: 'Pemasukan tidak ditemukan' });
+
+            db.prepare(`
+                UPDATE general_incomes SET
+                    date = COALESCE(?, date),
+                    category = COALESCE(?, category),
+                    amount = COALESCE(?, amount),
+                    note = COALESCE(?, note)
+                WHERE id = ?
+            `).run(
+                body.date || null,
+                body.category || null,
+                body.amount !== undefined ? Number(body.amount) : null,
+                body.note !== undefined ? body.note : null,
+                id
+            );
+            return send(res, 200, { success: true, message: 'Pemasukan berhasil diperbarui' });
+        }
+
+        if (req.method === 'DELETE') {
+            db.prepare('DELETE FROM general_incomes WHERE id = ?').run(id);
+            return send(res, 200, { success: true, message: 'Pemasukan berhasil dihapus' });
+        }
     }
 
     return send(res, 404, { message: 'Endpoint Not Found' });
