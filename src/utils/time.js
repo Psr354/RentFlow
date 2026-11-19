@@ -141,19 +141,23 @@ function getOverdueDetails(dueDate, monthYearStr, todayStr) {
     const diffTime = tDate.getTime() - dDate.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
+    const mList = getMonthsList(monthYearStr);
+    const periodMonthsCount = mList.length > 0 ? mList.length : 1;
+    const periodLabel = `${periodMonthsCount} Bulan Sewa`;
+
     if (diffDays <= 0) {
         const remainingDays = Math.abs(diffDays);
         return {
             isOverdue: false,
             days: 0,
             months: 0,
+            periodMonthsCount,
+            periodLabel,
+            monthsList: mList,
             overdueLabel: remainingDays === 0 ? 'Hari ini Jatuh Tempo' : `Jatuh tempo dlm ${remainingDays} hari`,
             statusType: 'NORMAL'
         };
     }
-
-    const mList = getMonthsList(monthYearStr);
-    const overdueMonthsCount = mList.length;
 
     let overdueLabel = '';
     if (diffDays < 30) {
@@ -166,7 +170,10 @@ function getOverdueDetails(dueDate, monthYearStr, todayStr) {
     return {
         isOverdue: true,
         days: diffDays,
-        months: overdueMonthsCount,
+        months: periodMonthsCount,
+        periodMonthsCount,
+        periodLabel,
+        monthsList: mList,
         overdueLabel,
         statusType: 'OVERDUE'
     };

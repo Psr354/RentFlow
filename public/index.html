@@ -2058,7 +2058,7 @@
                                     ${invMonths.map(m => `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">${m}</span>`).join('')}
                                 </div>
                                 <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                    ${ov.periodLabel}
+                                    ${ov?.periodLabel || `${invMonths.length} Bulan Sewa`}
                                 </span>
                             ` : `
                                 <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
@@ -2408,7 +2408,7 @@
                         ${isMultiMonth ? `
                             <div class="text-[11px] text-indigo-700 font-medium mt-1 leading-snug">${formatMonthsDisplay(monthsList)}</div>
                             <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                ${ov.periodLabel}
+                                ${ov?.periodLabel || `${monthsList.length} Bulan Sewa`}
                             </span>
                         ` : `
                             <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
