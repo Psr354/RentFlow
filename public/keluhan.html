@@ -194,6 +194,16 @@
             });
         }
 
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         async function initPage() {
             lucide.createIcons();
             const unitParam = getQueryParam('unit');
@@ -224,7 +234,7 @@
 
                     const sel = document.getElementById('form-unit');
                     sel.innerHTML = '<option value="">-- Pilih Nomor Unit --</option>' + 
-                        d.rooms.map(r => `<option value="${r.id}">Unit ${r.number}</option>`).join('');
+                        d.rooms.map(r => `<option value="${escapeHtml(r.id)}">Unit ${escapeHtml(r.number)}</option>`).join('');
 
                     if (unitParam) {
                         const match = d.rooms.find(r => r.number.toLowerCase() === unitParam.toLowerCase() || r.id === unitParam);

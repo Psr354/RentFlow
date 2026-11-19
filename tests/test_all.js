@@ -43,7 +43,7 @@ const ymWib = getMonthYearWIB();
 assert.match(ymWib, /^\d{4}-\d{2}$/, 'Format bulan-tahun WIB harus YYYY-MM');
 console.log(`✓ [2/7] Helper Waktu WIB tervalidasi: ${todayWib} (${ymWib}).`);
 
-// 3. Pengujian Validasi Gambar Base64 & Magic Bytes
+// 3. Pengujian Validasi Gambar Base64, Magic Bytes & Sanitasi HTML
 const {
     saveBase64Image,
     checkRateLimit: realCheckRateLimit,
@@ -51,8 +51,16 @@ const {
     isAuthed: realIsAuthed,
     createAuthToken: realCreateAuthToken,
     verifyWebhookSecret,
-    maskTenantName: realMaskTenantName
+    maskTenantName: realMaskTenantName,
+    escapeHtml
 } = require('../src/utils/security.js');
+
+// 3.1 Validasi escapeHtml
+assert.strictEqual(escapeHtml('<script>alert("XSS")</script>'), '&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;');
+assert.strictEqual(escapeHtml('Hello & "World" \'test\''), 'Hello &amp; &quot;World&quot; &#039;test&#039;');
+assert.strictEqual(escapeHtml(12345), '12345');
+assert.strictEqual(escapeHtml(null), '');
+assert.strictEqual(escapeHtml(undefined), '');
 
 // 1x1 valid PNG base64
 const validPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -76,15 +84,28 @@ for (let i = 0; i < 5; i++) {
 // Request ke-6 harus ditolak
 assert.strictEqual(realCheckRateLimit(testIp, 'test_ep_sec', 5, 1000), false, 'Request melebihi batas harus ditolak');
 
-// Uji penanganan IP reverse proxy
+// Uji penanganan IP reverse proxy & proteksi spoofing
 process.env.TRUST_PROXY = '1';
 const mockProxyReq = { headers: { 'x-forwarded-for': '203.0.113.195, 192.168.1.1' }, socket: { remoteAddress: '127.0.0.1' } };
-assert.strictEqual(getClientIp(mockProxyReq), '203.0.113.195', 'getClientIp harus mengekstrak client IP asli dari X-Forwarded-For jika TRUST_PROXY aktif');
+assert.strictEqual(getClientIp(mockProxyReq), '203.0.113.195', 'getClientIp harus mengekstrak client IP asli dari X-Forwarded-For jika remoteAddress adalah trusted proxy');
+
+const untrustedProxyReq = { headers: { 'x-forwarded-for': '1.2.3.4' }, socket: { remoteAddress: '198.51.100.25' } };
+assert.strictEqual(getClientIp(untrustedProxyReq), '198.51.100.25', 'Socket publik untrusted TIDAK boleh memalsukan IP melalui header X-Forwarded-For');
 console.log('✓ [4/7] In-memory Rate Limiter & Trusted Proxy tervalidasi.');
 
-// 5. Pengujian Keamanan Autentikasi Admin & Webhook Secret
-const validToken = realCreateAuthToken('admin');
-assert.strictEqual(realIsAuthed({ headers: { authorization: `Bearer ${validToken}` } }), true, 'Token HMAC valid harus diterima oleh isAuthed produksi');
+// 5. Pengujian Keamanan Autentikasi Admin, Token Scoping & Webhook Secret
+const validToken = realCreateAuthToken('admin', 'admin');
+const exportToken = realCreateAuthToken('wa-export', 'export');
+
+assert.strictEqual(realIsAuthed({ headers: { authorization: `Bearer ${validToken}` } }, 'admin'), true, 'Token HMAC admin valid harus diterima untuk admin scope');
+assert.strictEqual(realIsAuthed({ headers: { authorization: `Bearer ${exportToken}` } }, 'admin'), false, 'Token dengan scope export TIDAK boleh diizinkan pada admin scope');
+assert.strictEqual(realIsAuthed({ headers: { authorization: `Bearer ${exportToken}` } }, 'export'), true, 'Token dengan scope export harus diizinkan untuk export scope');
+assert.strictEqual(realIsAuthed({ headers: { authorization: `Bearer ${validToken}` } }, 'export'), true, 'Token admin harus dapat mengakses export scope');
+
+// Query parameter token enforcement
+assert.strictEqual(realIsAuthed({ headers: {}, query: { token: validToken } }, 'admin'), false, 'Token admin via query parameter HARUS ditolak');
+assert.strictEqual(realIsAuthed({ headers: {}, query: { token: exportToken } }, 'export'), true, 'Token export via query parameter harus diterima');
+
 assert.strictEqual(realIsAuthed({ headers: { authorization: 'Bearer tok_bypass_arbitrary_string' } }), false, 'Token palsu tok_bypass HARUS ditolak');
 assert.strictEqual(realIsAuthed({ headers: { authorization: 'Bearer session_fake_token' } }), false, 'Token session_fake HARUS ditolak');
 assert.strictEqual(realIsAuthed({ headers: { authorization: `Bearer ${validToken}corrupt` } }), false, 'Token yang dirusak HARUS ditolak');
@@ -550,6 +571,99 @@ async function testTraceFundCommands() {
                 // 11.10 Pengujian Otorisasi Endpoint Status WhatsApp
                 const resWaStatusUnauthed = await makeRequest(port, 'GET', '/api/wa/status', null, {});
                 assert.strictEqual(resWaStatusUnauthed.statusCode, 401, '/api/wa/status tanpa otentikasi HARUS ditolak dengan status 401');
+
+                // 11.11 Verifikasi Omission access_token pada GET /api/public/invoice/:id
+                const testLeakInvId = 'test-leak-inv';
+                appDb.prepare('DELETE FROM invoices WHERE id = ?').run(testLeakInvId);
+                appDb.prepare(`
+                    INSERT INTO invoices (id, room_id, month_year, amount, due_date, status, access_token, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'BELUM_BAYAR', ?, ?)
+                `).run(testLeakInvId, validRoom.id, 'November 2026', 500000, '2026-11-20', 'leak-test-token-123', new Date().toISOString());
+
+                const resGetPublicInv = await makeRequest(port, 'GET', `/api/public/invoice/${testLeakInvId}`, null, {});
+                assert.strictEqual(resGetPublicInv.statusCode, 200);
+                assert.strictEqual(resGetPublicInv.body.invoice.access_token, undefined, 'access_token TIDAK boleh dibocorkan pada GET /api/public/invoice/:id');
+                appDb.prepare('DELETE FROM invoices WHERE id = ?').run(testLeakInvId);
+
+                // 11.12 Verifikasi Proteksi Pendaftaran Grup WhatsApp (#daftargrup)
+                const resNonOwnerGroup = await handleIncomingWhatsAppMessage('08999999999', '#daftargrup', '12345678-group@g.us', null, true);
+                assert.match(resNonOwnerGroup.replyText, /hanya dapat dijalankan oleh nomor pemilik/i, 'Non-owner dilarang mendaftarkan grup WhatsApp');
+
+                // 11.13 Verifikasi Pembukuan Kelebihan Pembayaran (Overpayment) ke general_incomes
+                const testOverpayRoomId = 'room-overpay-test';
+                const testOverpayInvId = 'test-overpay-inv';
+                appDb.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(testOverpayInvId);
+                appDb.prepare('DELETE FROM invoices WHERE id = ?').run(testOverpayInvId);
+                appDb.prepare('DELETE FROM rooms WHERE id = ?').run(testOverpayRoomId);
+
+                appDb.prepare("INSERT INTO rooms (id, number, status, tenant_name) VALUES (?, '99.OP', 'TERISI', 'Budi Overpay')").run(testOverpayRoomId);
+                appDb.prepare(`
+                    INSERT INTO invoices (id, room_id, month_year, amount, due_date, status, access_token, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'BELUM_BAYAR', ?, ?)
+                `).run(testOverpayInvId, testOverpayRoomId, 'Desember 2026', 500000, '2026-12-05', 'tok-overpay-123', new Date().toISOString());
+
+                const resOverpay = await makeRequest(port, 'POST', `/api/invoices/${testOverpayInvId}/pay`, {
+                    amount: 600000,
+                    payment_method: 'TRANSFER',
+                    notes: 'Kelebihan bayar 100rb'
+                });
+                assert.strictEqual(resOverpay.statusCode, 200);
+                const overpayInv = appDb.prepare('SELECT * FROM invoices WHERE id = ?').get(testOverpayInvId);
+                assert.strictEqual(overpayInv.status, 'LUNAS');
+                const excessRecord = appDb.prepare("SELECT * FROM general_incomes WHERE note LIKE ?").get(`%tagihan ${testOverpayInvId}%`);
+                assert(excessRecord !== undefined, 'Kelebihan pembayaran tagihan harus dicatat ke general_incomes');
+                assert.strictEqual(excessRecord.amount, 100000, 'Nominal pencatatan titipan sewa harus tepat selisihnya');
+                assert.strictEqual(excessRecord.category, 'Titipan Sewa', 'Kategori pencatatan harus Titipan Sewa');
+
+                // Bersihkan record overpay & room isolasi
+                appDb.prepare('DELETE FROM general_incomes WHERE id = ?').run(excessRecord.id);
+                appDb.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(testOverpayInvId);
+                appDb.prepare('DELETE FROM invoices WHERE id = ?').run(testOverpayInvId);
+                appDb.prepare('DELETE FROM rooms WHERE id = ?').run(testOverpayRoomId);
+
+                // 11.14 Pengujian Endpoint /api/tracefund/export-csv dengan Token Scoping
+                const resCsvNoAuth = await makeRequest(port, 'GET', '/api/tracefund/export-csv', null, {});
+                assert.strictEqual(resCsvNoAuth.statusCode, 401, 'Export CSV tanpa token harus ditolak (401)');
+
+                const resCsvExportToken = await makeRequest(port, 'GET', `/api/tracefund/export-csv?token=${exportToken}`, null, {});
+                assert.strictEqual(resCsvExportToken.statusCode, 200, 'Export CSV dengan scoped export token harus diizinkan (200)');
+                assert.match(resCsvExportToken.headers['content-type'], /text\/csv/, 'Content-Type harus text/csv');
+
+                const resAdminWithExportToken = await makeRequest(port, 'GET', '/api/settings', null, {
+                    'Authorization': `Bearer ${exportToken}`
+                });
+                assert.strictEqual(resAdminWithExportToken.statusCode, 401, 'Token dengan scope export TIDAK boleh mengakses /api/settings');
+
+                // 11.15 Pengujian Whitelist Settings & Pencegahan Mass Assignment
+                const resPostSettings = await makeRequest(port, 'POST', '/api/settings', {
+                    app_name: 'Kontrakan Nenek Yuyun Updated',
+                    injected_evil_key: 'malicious_value',
+                    jwt_secret: 'hacked_secret'
+                });
+                assert.strictEqual(resPostSettings.statusCode, 200);
+                const checkInjected = appDb.prepare('SELECT value FROM settings WHERE key = ?').get('injected_evil_key');
+                assert.strictEqual(checkInjected, undefined, 'Key sembarang yang tidak masuk whitelist HARUS diabaikan');
+
+                // 11.16 Pengujian Validasi Format Email pada Test Email API
+                const resInvalidEmail = await makeRequest(port, 'POST', '/api/settings/test-email', {
+                    test_email: 'invalid-email-string'
+                });
+                assert.strictEqual(resInvalidEmail.statusCode, 400, 'Format email tidak valid harus ditolak dengan status 400');
+
+                // 11.17 Pengujian Login Menggunakan Constant Time Comparison
+                const resLoginWrong = await makeRequest(port, 'POST', '/api/login', {
+                    username: 'admin',
+                    password: 'wrong_password_123'
+                }, { 'Content-Type': 'application/json' });
+                assert.strictEqual(resLoginWrong.statusCode, 401, 'Kata sandi salah harus ditolak dengan status 401');
+
+                const { APP_USER, APP_PASS } = require('../src/config/env.js');
+                const resLoginOk = await makeRequest(port, 'POST', '/api/login', {
+                    username: APP_USER,
+                    password: APP_PASS
+                }, { 'Content-Type': 'application/json' });
+                assert.strictEqual(resLoginOk.statusCode, 200, 'Kredensial benar harus berhasil masuk dengan status 200');
+                assert(typeof resLoginOk.body.token === 'string', 'Login harus mengembalikan token otentikasi');
 
                 appServer.close(resolve);
             } catch (err) {

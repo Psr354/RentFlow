@@ -35,7 +35,11 @@ def format_month_year(date_str):
 
 def fetch_postgres_data():
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.load_system_host_keys()
+    if os.getenv("SSH_STRICT_HOST_CHECK", "0") == "1":
+        ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    else:
+        ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
     ssh.connect(SSH_HOST, username=SSH_USER, password=SSH_PASS, timeout=10)
 
     def query_json(sql):

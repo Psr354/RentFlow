@@ -2,7 +2,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { getSettings, setSetting } = require('../config/database');
-const { UPLOAD_DIR, MAX_BODY } = require('../config/env');
+const { UPLOAD_DIR, MAX_BODY, APP_USER } = require('../config/env');
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 // Autentikasi Admin Berbasis Token Kriptografis (HMAC-SHA256)
 let JWT_SECRET = process.env.JWT_SECRET || getSettings().jwt_secret;
@@ -37,21 +47,50 @@ function verifyWebhookSecret(req) {
 }
 
 function getClientIp(req) {
+    const remote = req.socket?.remoteAddress || '127.0.0.1';
     const trustProxy = process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true';
     if (trustProxy && req.headers) {
-        const xff = req.headers['x-forwarded-for'];
-        if (xff) {
-            const first = String(xff).split(',')[0].trim();
-            if (first) return first;
+        const isLocalOrPrivate = remote === '127.0.0.1' ||
+            remote === '::1' ||
+            remote === '::ffff:127.0.0.1' ||
+            remote.startsWith('10.') ||
+            remote.startsWith('172.16.') ||
+            remote.startsWith('172.17.') ||
+            remote.startsWith('172.18.') ||
+            remote.startsWith('172.19.') ||
+            remote.startsWith('172.20.') ||
+            remote.startsWith('172.21.') ||
+            remote.startsWith('172.22.') ||
+            remote.startsWith('172.23.') ||
+            remote.startsWith('172.24.') ||
+            remote.startsWith('172.25.') ||
+            remote.startsWith('172.26.') ||
+            remote.startsWith('172.27.') ||
+            remote.startsWith('172.28.') ||
+            remote.startsWith('172.29.') ||
+            remote.startsWith('172.30.') ||
+            remote.startsWith('172.31.') ||
+            remote.startsWith('192.168.');
+
+        if (isLocalOrPrivate) {
+            const xff = req.headers['x-forwarded-for'];
+            if (xff) {
+                const first = String(xff).split(',')[0].trim();
+                if (first) return first;
+            }
+            const realIp = req.headers['x-real-ip'];
+            if (realIp) return String(realIp).trim();
         }
-        const realIp = req.headers['x-real-ip'];
-        if (realIp) return String(realIp).trim();
     }
-    return req.socket?.remoteAddress || 'unknown';
+    return remote;
 }
 
-function createAuthToken(username) {
-    const payload = JSON.stringify({ u: username, exp: Date.now() + (14 * 24 * 60 * 60 * 1000) });
+function createAuthToken(username, scope = 'admin', expiresInMs = (14 * 24 * 60 * 60 * 1000)) {
+    const payload = JSON.stringify({
+        u: username,
+        scope: scope,
+        exp: Date.now() + expiresInMs
+    });
     const b64 = Buffer.from(payload).toString('base64url');
     const sig = crypto.createHmac('sha256', JWT_SECRET).update(b64).digest('base64url');
     return `${b64}.${sig}`;
@@ -59,17 +98,22 @@ function createAuthToken(username) {
 
 const tokens = new Map();
 
-function isAuthed(req) {
-    const authHeader = req.headers.authorization;
+function isAuthed(req, requiredScope = 'admin') {
+    const authHeader = req.headers?.authorization;
     let token = null;
     if (authHeader && authHeader.startsWith('Bearer ')) {
         token = authHeader.substring(7).trim();
     }
-    if (!token && req.url) {
-        try {
-            const parsedUrl = new URL(req.url, 'http://localhost');
-            token = parsedUrl.searchParams.get('token');
-        } catch (_) {}
+    // Hanya izinkan token query param untuk scope non-admin (misal 'export')
+    if (!token && requiredScope !== 'admin') {
+        if (req.query && req.query.token) {
+            token = req.query.token;
+        } else if (req.url) {
+            try {
+                const parsedUrl = new URL(req.url, 'http://localhost');
+                token = parsedUrl.searchParams.get('token');
+            } catch (_) {}
+        }
     }
     if (!token) return false;
 
@@ -85,7 +129,14 @@ function isAuthed(req) {
                 try {
                     const payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8'));
                     if (payload.exp && Date.now() < payload.exp) {
-                        return true;
+                        const tokenScope = payload.scope || (payload.u === APP_USER ? 'admin' : 'unknown');
+                        if (requiredScope === 'admin') {
+                            return tokenScope === 'admin' && payload.u === APP_USER;
+                        }
+                        if (requiredScope === 'export') {
+                            return tokenScope === 'export' || (tokenScope === 'admin' && payload.u === APP_USER);
+                        }
+                        return tokenScope === requiredScope;
                     }
                 } catch (_) {}
             }
@@ -93,7 +144,7 @@ function isAuthed(req) {
     }
 
     // 2. Fallback Token InMemory
-    if (tokens.has(token)) {
+    if (requiredScope === 'admin' && tokens.has(token)) {
         if (Date.now() < tokens.get(token)) return true;
         tokens.delete(token);
     }
@@ -224,6 +275,7 @@ function serveStaticFile(res, filePath, contentType) {
 }
 
 module.exports = {
+    escapeHtml,
     JWT_SECRET,
     WA_WEBHOOK_SECRET,
     verifyWebhookSecret,

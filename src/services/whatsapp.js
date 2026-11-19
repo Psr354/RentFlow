@@ -210,10 +210,10 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
 
     // 1. Menu / Bantuan
     if (/^#?(menu|bantuan|help)$/i.test(trimmed)) {
-        if (isGroup && !registeredGroupId) {
+        if (isGroup && !registeredGroupId && isOwner) {
             setSetting('wa_group_id', remoteJid);
             registeredGroupId = remoteJid;
-            console.log(`[WA] Grup keluarga otomatis didaftarkan via #bantuan: ${remoteJid}`);
+            console.log(`[WA] Grup keluarga didaftarkan via #bantuan oleh pemilik: ${remoteJid}`);
         }
 
         const replyText = `*Daftar Perintah Bot Kontrakan (Fitur TraceFund Terpadu):*\n\n` +
@@ -252,6 +252,11 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
 
     // 2. Pendaftaran Grup Keluarga: #daftargrup atau #setgrup
     if (isGroup && /^#?(daftargrup|setgrup)$/i.test(trimmed)) {
+        if (!isOwner) {
+            const replyText = 'Perintah pendaftaran grup hanya dapat dijalankan oleh nomor pemilik terdaftar.';
+            await safeSend(replyText);
+            return { success: false, message: 'Bukan pemilik', replyText };
+        }
         setSetting('wa_group_id', remoteJid);
         registeredGroupId = remoteJid;
         const replyText = `*Grup WhatsApp Keluarga Berhasil Didaftarkan!*\n\n` +
@@ -274,16 +279,10 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             return { success: false, message: 'Bukan pemilik' };
         }
         setSetting('wa_group_id', '');
+        registeredGroupId = '';
         const replyText = 'Tautan grup dengan sistem kontrakan telah dinonaktifkan.';
         await safeSend(replyText);
         return { success: true, replyText };
-    }
-
-    // Otomatis daftarkan grup jika sistem belum memiliki wa_group_id terdaftar
-    if (isGroup && !registeredGroupId) {
-        setSetting('wa_group_id', remoteJid);
-        registeredGroupId = remoteJid;
-        console.log(`[WA] Grup keluarga otomatis didaftarkan: ${remoteJid}`);
     }
 
     const isRegisteredGroup = isGroup && registeredGroupId && remoteJid === registeredGroupId;
@@ -958,7 +957,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
     const eksporMatch = trimmed.match(/^#?(?:ekspor|csv)(?:\s+(.+))?$/i);
     if (eksporMatch) {
         const rawArg = eksporMatch[1] ? eksporMatch[1].trim() : '';
-        const token = createAuthToken('wa-export');
+        const token = createAuthToken('wa-export', 'export', 30 * 60 * 1000);
         let exportUrl = `${settings.base_url || 'https://sekeluarga.web.id'}/api/tracefund/export-csv?token=${encodeURIComponent(token)}`;
         let periodLabel = 'Seluruh Periode';
 

@@ -3,7 +3,21 @@ const { handleRequest } = require('./routes/index');
 const { db } = require('./config/database');
 
 const server = http.createServer(async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const origin = req.headers.origin;
+    const reqUrl = req.url || '';
+    if (origin) {
+        if (reqUrl.startsWith('/api/public/')) {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+        } else {
+            const isLocalOrTrusted = origin.includes('localhost') || 
+                origin.includes('127.0.0.1') || 
+                origin.includes('sekeluarga.web.id');
+            if (isLocalOrTrusted) {
+                res.setHeader('Access-Control-Allow-Origin', origin);
+                res.setHeader('Vary', 'Origin');
+            }
+        }
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('X-Content-Type-Options', 'nosniff');

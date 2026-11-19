@@ -550,7 +550,7 @@
             const chipsEl = document.getElementById('invoice-months-chips');
             if (chipsEl) {
                 if (mList.length > 1) {
-                    chipsEl.innerHTML = mList.map(m => `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">${m}</span>`).join('');
+                    chipsEl.innerHTML = mList.map(m => `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">${escapeHtml(m)}</span>`).join('');
                     chipsEl.classList.remove('hidden');
                 } else {
                     chipsEl.classList.add('hidden');
@@ -584,7 +584,7 @@
                     <div class="flex items-center justify-between py-2 px-3 rounded-xl bg-white border border-slate-200 text-xs">
                         <div>
                             <span class="font-bold text-slate-800">${idx + 1}. ${formatRupiah(p.amount)}</span>
-                            <span class="text-[10px] text-slate-400 ml-1.5 font-medium">${p.payment_date} (${p.payment_method})</span>
+                            <span class="text-[10px] text-slate-400 ml-1.5 font-medium">${escapeHtml(p.payment_date)} (${escapeHtml(p.payment_method)})</span>
                             ${p.notes ? `<p class="text-[10px] text-slate-500 italic mt-0.5">${escapeHtml(p.notes)}</p>` : ''}
                         </div>
                         <span class="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-100">Diterima</span>
@@ -605,7 +605,7 @@
                             <div>
                                 <h4 class="font-bold text-rose-900 text-xs">Peringatan: Melewati Batas Jatuh Tempo</h4>
                                 <p class="text-[11px] text-rose-700 mt-0.5 leading-relaxed">
-                                    Tagihan sewa untuk <strong>Periode ${invoiceData.month_year}${mList.length > 1 ? ` (${formatMonthsDisplay(mList)})` : ''}</strong> telah melewati jatuh tempo selama <strong>${ov.overdueLabel.replace('Nunggak ', '')}</strong> (Batas: ${invoiceData.due_date}). Mohon segera menyelesaikan sisa pembayaran sebesar <strong>${formatRupiah(remaining)}</strong>.
+                                    Tagihan sewa untuk <strong>Periode ${escapeHtml(invoiceData.month_year)}${mList.length > 1 ? ` (${escapeHtml(formatMonthsDisplay(mList))})` : ''}</strong> telah melewati jatuh tempo selama <strong>${escapeHtml(ov.overdueLabel.replace('Nunggak ', ''))}</strong> (Batas: ${escapeHtml(invoiceData.due_date)}). Mohon segera menyelesaikan sisa pembayaran sebesar <strong>${formatRupiah(remaining)}</strong>.
                                 </p>
                             </div>
                         </div>
@@ -663,7 +663,7 @@
                 statusBox.className = "text-xs rounded-2xl p-4 bg-amber-50 border border-amber-200 text-amber-800 space-y-1";
                 statusBox.innerHTML = `
                     <p class="font-bold">Konfirmasi Pembayaran Sedang Diverifikasi Pemilik</p>
-                    <p class="text-[11px] text-amber-700">Metode: <strong>${invoiceData.payment_method || 'Transfer'}</strong>. Pemilik kontrakan sedang mengecek mutasi rekening atau catatan pembayaran Anda.</p>
+                    <p class="text-[11px] text-amber-700">Metode: <strong>${escapeHtml(invoiceData.payment_method || 'Transfer')}</strong>. Pemilik kontrakan sedang mengecek mutasi rekening atau catatan pembayaran Anda.</p>
                 `;
                 statusBox.classList.remove('hidden');
                 selectionSection.classList.remove('hidden');

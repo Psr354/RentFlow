@@ -2171,27 +2171,27 @@
                     <tr class="hover:bg-slate-50/70 transition-colors border-b border-slate-100 last:border-b-0">
                         <td class="py-3.5 px-4 align-middle whitespace-nowrap">
                             <span class="inline-flex items-center justify-center font-black text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-lg">
-                                ${inv.room_number}
+                                ${escapeHtml(inv.room_number)}
                             </span>
                         </td>
                         <td class="py-3.5 px-4 align-middle">
-                            <div class="font-bold text-slate-900 text-xs">${inv.tenant_name || '-'}</div>
-                            <div class="text-[11px] text-slate-400 font-mono mt-0.5">${inv.tenant_phone || '-'}</div>
+                            <div class="font-bold text-slate-900 text-xs">${escapeHtml(inv.tenant_name || '-')}</div>
+                            <div class="text-[11px] text-slate-400 font-mono mt-0.5">${escapeHtml(inv.tenant_phone || '-')}</div>
                             ${unitSummary.count > 1 ? `
                                 <div class="mt-2 p-2 rounded-xl bg-rose-50/80 border border-rose-200 text-[11px] text-rose-800">
                                     <p class="font-bold">Total Nunggak: ${unitSummary.allMonths.length} Bulan (${formatRupiah(unitSummary.totalRemaining)})</p>
-                                    <p class="text-rose-600 font-medium mt-0.5">Bulan: ${formatMonthsDisplay(unitSummary.allMonths)}</p>
+                                    <p class="text-rose-600 font-medium mt-0.5">Bulan: ${escapeHtml(formatMonthsDisplay(unitSummary.allMonths))}</p>
                                 </div>
                             ` : ''}
                         </td>
                         <td class="py-3.5 px-4 align-middle">
-                            <div class="font-bold text-slate-800 text-xs">${inv.month_year}</div>
+                            <div class="font-bold text-slate-800 text-xs">${escapeHtml(inv.month_year)}</div>
                             ${isMultiMonth ? `
                                 <div class="mt-1 flex flex-wrap gap-1">
-                                    ${invMonths.map(m => `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">${m}</span>`).join('')}
+                                    ${invMonths.map(m => `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">${escapeHtml(m)}</span>`).join('')}
                                 </div>
                                 <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                    ${ov?.periodLabel || `${invMonths.length} Bulan Sewa`}
+                                    ${escapeHtml(ov?.periodLabel || `${invMonths.length} Bulan Sewa`)}
                                 </span>
                             ` : `
                                 <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
@@ -2201,10 +2201,10 @@
                         </td>
                         <td class="py-3.5 px-4 align-middle whitespace-nowrap">
                             <div class="font-medium text-slate-700 text-xs flex items-center gap-1.5">
-                                <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i> ${inv.due_date}
+                                <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i> ${escapeHtml(inv.due_date)}
                             </div>
                             <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${ov.isOverdue ? 'bg-rose-50 text-rose-700 border border-rose-200' : (ov.statusType === 'TODAY' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-sky-50 text-sky-800 border border-sky-200')}">
-                                <span class="w-1.5 h-1.5 rounded-full ${ov.isOverdue ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}"></span> ${ov.overdueLabel}
+                                <span class="w-1.5 h-1.5 rounded-full ${ov.isOverdue ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}"></span> ${escapeHtml(ov.overdueLabel)}
                             </span>
                         </td>
                         <td class="py-3.5 px-4 align-middle whitespace-nowrap">
@@ -2213,20 +2213,20 @@
                         </td>
                         <td class="py-3.5 px-4 align-middle text-right whitespace-nowrap pr-5">
                             <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
-                                <button type="button" onclick="openPaymentModal('${inv.id}')" class="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition" title="Catat Cicilan atau Lunasi">
+                                <button type="button" onclick="openPaymentModal('${escapeHtml(inv.id)}')" class="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition" title="Catat Cicilan atau Lunasi">
                                     <i data-lucide="credit-card" class="w-3.5 h-3.5"></i> Bayar
                                 </button>
                                 <div class="h-8 inline-flex items-center rounded-xl border border-slate-200/90 bg-slate-50/90 p-0.5 gap-0.5 shadow-xs">
-                                    <button type="button" onclick="sendInvoiceReminder('${inv.id}', 'both')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-sky-600 hover:bg-white transition" title="Kirim Notifikasi Otomatis via Bot WA & Email">
+                                    <button type="button" onclick="sendInvoiceReminder('${escapeHtml(inv.id)}', 'both')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-sky-600 hover:bg-white transition" title="Kirim Notifikasi Otomatis via Bot WA & Email">
                                         <i data-lucide="send" class="w-3.5 h-3.5"></i>
                                     </button>
                                     ${(inv.payment_count > 0 || paid > 0) ? `
-                                        <button type="button" onclick="openInstallmentsModal('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-purple-600 hover:text-purple-700 hover:bg-white transition" title="Lihat & Kelola Cicilan (${inv.payment_count || 1}x)">
+                                        <button type="button" onclick="openInstallmentsModal('${escapeHtml(inv.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-purple-600 hover:text-purple-700 hover:bg-white transition" title="Lihat & Kelola Cicilan (${inv.payment_count || 1}x)">
                                             <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
                                         </button>
                                     ` : ''}
                                     <span class="w-px h-3.5 bg-slate-200/80 mx-0.5"></span>
-                                    <button type="button" onclick="editInvoice('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition" title="Edit Tagihan">
+                                    <button type="button" onclick="editInvoice('${escapeHtml(inv.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition" title="Edit Tagihan">
                                         <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                                     </button>
                                 </div>
@@ -2242,11 +2242,11 @@
             const container = document.getElementById('dashboard-unit-chips');
             container.innerHTML = roomsData.map(r => `
                 <div class="p-3 rounded-xl border text-center transition ${r.status === 'TERISI' ? 'bg-emerald-50/50 border-emerald-200' : 'bg-slate-50 border-slate-200'}">
-                    <p class="font-black text-xs text-slate-800">${r.number}</p>
+                    <p class="font-black text-xs text-slate-800">${escapeHtml(r.number)}</p>
                     <span class="inline-block px-2 py-0.5 mt-1 rounded-full text-[10px] font-bold ${r.status === 'TERISI' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
                         ${r.status}
                     </span>
-                    <p class="text-[10px] text-slate-500 mt-1 truncate">${r.tenant_name || 'Kosong'}</p>
+                    <p class="text-[10px] text-slate-500 mt-1 truncate">${escapeHtml(r.tenant_name || 'Kosong')}</p>
                 </div>
             `).join('');
         }
@@ -2331,8 +2331,8 @@
                         const waPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
                         return `
                         <tr class="hover:bg-slate-50/80 transition">
-                            <td class="py-3.5 px-4 font-bold text-slate-900">${r.number}</td>
-                            <td class="py-3.5 px-4 text-slate-600">${r.type || 'Kontrakan'}</td>
+                            <td class="py-3.5 px-4 font-bold text-slate-900">${escapeHtml(r.number)}</td>
+                            <td class="py-3.5 px-4 text-slate-600">${escapeHtml(r.type || 'Kontrakan')}</td>
                             <td class="py-3.5 px-4 text-slate-600">4 orang</td>
                             <td class="py-3.5 px-4 font-bold text-slate-800">${formatRupiah(r.price)}</td>
                             <td class="py-3.5 px-4">
@@ -2341,21 +2341,21 @@
                                 </span>
                             </td>
                             <td class="py-3.5 px-4">
-                                <span class="font-bold text-slate-900">${r.tenant_name || '-'}</span>
+                                <span class="font-bold text-slate-900">${escapeHtml(r.tenant_name || '-')}</span>
                                 ${r.tenant_phone ? `
                                     <div class="mt-0.5">
-                                        <a href="https://wa.me/${waPhone}" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:text-emerald-700 font-bold hover:underline font-mono">
-                                            <i data-lucide="message-circle" class="w-3 h-3"></i> ${r.tenant_phone}
+                                        <a href="https://wa.me/${encodeURIComponent(waPhone)}" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:text-emerald-700 font-bold hover:underline font-mono">
+                                            <i data-lucide="message-circle" class="w-3 h-3"></i> ${escapeHtml(r.tenant_phone)}
                                         </a>
                                     </div>
                                 ` : ''}
                             </td>
                             <td class="py-3.5 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">
-                                    <button onclick="editRoom('${r.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="Edit Unit">
+                                    <button onclick="editRoom('${escapeHtml(r.id)}')" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="Edit Unit">
                                         <i data-lucide="edit-3" class="w-4 h-4 text-amber-500"></i>
                                     </button>
-                                    <button onclick="deleteRoom('${r.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Hapus Unit">
+                                    <button onclick="deleteRoom('${escapeHtml(r.id)}')" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Hapus Unit">
                                         <i data-lucide="trash-2" class="w-4 h-4"></i>
                                     </button>
                                 </div>
@@ -2378,36 +2378,36 @@
                         <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between space-y-4">
                             <div>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-sm font-black text-slate-900">${r.number}</span>
+                                    <span class="text-sm font-black text-slate-900">${escapeHtml(r.number)}</span>
                                     <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${r.status === 'TERISI' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">
                                         ${r.status === 'TERISI' ? 'Terisi' : 'Tersedia'}
                                     </span>
                                 </div>
-                                <p class="text-xs text-slate-400 mt-0.5">Tipe: ${r.type || 'Standard'} • Jatuh Tempo Tgl ${r.due_day || 1}</p>
+                                <p class="text-xs text-slate-400 mt-0.5">Tipe: ${escapeHtml(r.type || 'Standard')} • Jatuh Tempo Tgl ${r.due_day || 1}</p>
                                 <p class="text-base font-extrabold text-indigo-600 my-2">${formatRupiah(r.price)} <span class="text-xs font-normal text-slate-400">/bln</span></p>
 
                                 <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs">
                                     ${r.status === 'TERISI' ? `
                                         <div class="flex justify-between">
                                             <span class="text-slate-400">Penghuni:</span>
-                                            <span class="font-bold text-slate-800">${r.tenant_name || '-'}</span>
+                                            <span class="font-bold text-slate-800">${escapeHtml(r.tenant_name || '-')}</span>
                                         </div>
                                         <div class="flex justify-between items-center">
                                             <span class="text-slate-400">WhatsApp:</span>
                                             ${r.tenant_phone ? `
-                                                <a href="https://wa.me/${waPhone}" target="_blank" class="font-mono text-emerald-600 font-bold hover:underline flex items-center gap-1 text-[11px]">
-                                                    <i data-lucide="message-circle" class="w-3 h-3"></i> ${r.tenant_phone}
+                                                <a href="https://wa.me/${encodeURIComponent(waPhone)}" target="_blank" class="font-mono text-emerald-600 font-bold hover:underline flex items-center gap-1 text-[11px]">
+                                                    <i data-lucide="message-circle" class="w-3 h-3"></i> ${escapeHtml(r.tenant_phone)}
                                                 </a>
                                             ` : '<span class="text-slate-400 font-mono">-</span>'}
                                         </div>
                                         <div class="flex justify-between">
                                             <span class="text-slate-400">Email:</span>
-                                            <span class="text-slate-700 truncate max-w-[150px]">${r.tenant_email || '-'}</span>
+                                            <span class="text-slate-700 truncate max-w-[150px]">${escapeHtml(r.tenant_email || '-')}</span>
                                         </div>
                                     ` : `
                                         <div class="py-1.5 text-center space-y-2">
                                             <p class="text-slate-400 text-xs italic">Unit saat ini belum berpenghuni</p>
-                                            <button onclick="editRoom('${r.id}')" class="w-full py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-indigo-200 transition">
+                                            <button onclick="editRoom('${escapeHtml(r.id)}')" class="w-full py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-indigo-200 transition">
                                                 <i data-lucide="user-plus" class="w-3.5 h-3.5"></i> Isi Data Penghuni
                                             </button>
                                         </div>
@@ -2416,7 +2416,7 @@
                             </div>
 
                             <div class="pt-3 border-t flex items-center justify-end gap-2">
-                                <button onclick="editRoom('${r.id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs flex items-center gap-1">
+                                <button onclick="editRoom('${escapeHtml(r.id)}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs flex items-center gap-1">
                                     <i data-lucide="edit" class="w-3.5 h-3.5"></i> Edit Unit
                                 </button>
                             </div>
@@ -2697,26 +2697,26 @@
                 <tr class="hover:bg-slate-50/70 transition-colors border-b border-slate-100 last:border-b-0">
                     <td class="py-4 px-4 align-middle whitespace-nowrap">
                         <span class="font-mono text-xs font-semibold text-slate-700 bg-slate-100/90 border border-slate-200/80 px-2.5 py-1 rounded-md select-all">
-                            ${inv.id}
+                            ${escapeHtml(inv.id)}
                         </span>
                     </td>
                     <td class="py-4 px-4 align-middle whitespace-nowrap">
                         <div class="flex items-center gap-2.5">
                             <span class="inline-flex items-center justify-center font-black text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-lg">
-                                ${inv.room_number}
+                                ${escapeHtml(inv.room_number)}
                             </span>
                             <div class="min-w-0">
-                                <div class="font-bold text-slate-900 text-xs">${inv.tenant_name || '-'}</div>
-                                ${inv.tenant_phone ? `<div class="text-[10px] text-slate-400 font-mono mt-0.5">${inv.tenant_phone}</div>` : ''}
+                                <div class="font-bold text-slate-900 text-xs">${escapeHtml(inv.tenant_name || '-')}</div>
+                                ${inv.tenant_phone ? `<div class="text-[10px] text-slate-400 font-mono mt-0.5">${escapeHtml(inv.tenant_phone)}</div>` : ''}
                             </div>
                         </div>
                     </td>
                     <td class="py-4 px-4 align-middle">
-                        <div class="font-bold text-slate-800 text-xs leading-tight">${inv.month_year}</div>
+                        <div class="font-bold text-slate-800 text-xs leading-tight">${escapeHtml(inv.month_year)}</div>
                         ${isMultiMonth ? `
-                            <div class="text-[11px] text-indigo-700 font-medium mt-1 leading-snug">${formatMonthsDisplay(monthsList)}</div>
+                            <div class="text-[11px] text-indigo-700 font-medium mt-1 leading-snug">${escapeHtml(formatMonthsDisplay(monthsList))}</div>
                             <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                ${ov?.periodLabel || `${monthsList.length} Bulan Sewa`}
+                                ${escapeHtml(ov?.periodLabel || `${monthsList.length} Bulan Sewa`)}
                             </span>
                         ` : `
                             <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
@@ -2726,12 +2726,12 @@
                     </td>
                     <td class="py-4 px-4 align-middle whitespace-nowrap">
                         <div class="font-medium text-slate-700 text-xs flex items-center gap-1.5">
-                            <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i> ${inv.due_date}
+                            <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i> ${escapeHtml(inv.due_date)}
                         </div>
                         ${inv.status !== 'LUNAS' ? (
                             ov.isOverdue ? `
                                 <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> ${ov.overdueLabel}
+                                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> ${escapeHtml(ov.overdueLabel)}
                                 </span>
                             ` : (ov.statusType === 'TODAY' ? `
                                 <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap">
@@ -2739,7 +2739,7 @@
                                 </span>
                             ` : `
                                 <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
-                                    ${ov.overdueLabel}
+                                    ${escapeHtml(ov.overdueLabel)}
                                 </span>
                             `)
                         ) : ''}
@@ -2773,7 +2773,7 @@
                         </span>
                         ${inv.payment_count > 0 ? `
                             <div class="mt-1">
-                                <button type="button" onclick="openInstallmentsModal('${inv.id}')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 transition" title="Buka Riwayat Cicilan">
+                                <button type="button" onclick="openInstallmentsModal('${escapeHtml(inv.id)}')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 transition" title="Buka Riwayat Cicilan">
                                     <i data-lucide="receipt" class="w-3 h-3 text-purple-600"></i> ${inv.payment_count}x cicilan
                                 </button>
                             </div>
@@ -2782,24 +2782,24 @@
                     <td class="py-4 px-4 align-middle text-right whitespace-nowrap pr-5">
                         <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
                             ${inv.status !== 'LUNAS' ? `
-                                <button type="button" onclick="openPaymentModal('${inv.id}')" class="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition" title="Catat Pembayaran atau Cicilan">
+                                <button type="button" onclick="openPaymentModal('${escapeHtml(inv.id)}')" class="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition" title="Catat Pembayaran atau Cicilan">
                                     <i data-lucide="credit-card" class="w-3.5 h-3.5"></i> Bayar
                                 </button>
                             ` : `
-                                <button type="button" onclick="printInvoicePDF('${inv.id}')" class="h-8 px-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 transition" title="Cetak Kuitansi Resmi">
+                                <button type="button" onclick="printInvoicePDF('${escapeHtml(inv.id)}')" class="h-8 px-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 transition" title="Cetak Kuitansi Resmi">
                                     <i data-lucide="printer" class="w-3.5 h-3.5"></i> Kuitansi
                                 </button>
                             `}
 
                             <div class="h-8 inline-flex items-center rounded-xl border border-slate-200/90 bg-slate-50/90 p-0.5 gap-0.5 shadow-xs">
                                 ${inv.status !== 'LUNAS' ? `
-                                    <button type="button" onclick="sendInvoiceReminder('${inv.id}', 'both')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-sky-600 hover:bg-white transition" title="Kirim Pengingat Otomatis via Bot WA & Email">
+                                    <button type="button" onclick="sendInvoiceReminder('${escapeHtml(inv.id)}', 'both')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-sky-600 hover:bg-white transition" title="Kirim Pengingat Otomatis via Bot WA & Email">
                                         <i data-lucide="send" class="w-3.5 h-3.5"></i>
                                     </button>
                                 ` : ''}
 
                                 ${inv.payment_count > 0 ? `
-                                    <button type="button" onclick="openInstallmentsModal('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-purple-600 hover:text-purple-700 hover:bg-white transition" title="Lihat ${inv.payment_count} Riwayat Cicilan">
+                                    <button type="button" onclick="openInstallmentsModal('${escapeHtml(inv.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-purple-600 hover:text-purple-700 hover:bg-white transition" title="Lihat ${inv.payment_count} Riwayat Cicilan">
                                         <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
                                     </button>
                                 ` : ''}
@@ -2810,17 +2810,17 @@
                                     </button>
                                 ` : ''}
 
-                                <a href="/tagihan.html?id=${inv.id}${inv.access_token ? `&token=${encodeURIComponent(inv.access_token)}` : ''}" target="_blank" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-white transition" title="Buka Link Tagihan Publik">
+                                <a href="/tagihan.html?id=${encodeURIComponent(inv.id)}${inv.access_token ? `&token=${encodeURIComponent(inv.access_token)}` : ''}" target="_blank" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-white transition" title="Buka Link Tagihan Publik">
                                     <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
                                 </a>
 
                                 <span class="w-px h-3.5 bg-slate-200/80 mx-0.5"></span>
 
-                                <button type="button" onclick="editInvoice('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition" title="Edit Tagihan">
+                                <button type="button" onclick="editInvoice('${escapeHtml(inv.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition" title="Edit Tagihan">
                                     <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                                 </button>
 
-                                <button type="button" onclick="deleteInvoice('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white transition" title="Hapus Tagihan">
+                                <button type="button" onclick="deleteInvoice('${escapeHtml(inv.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white transition" title="Hapus Tagihan">
                                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                 </button>
                             </div>
@@ -2987,20 +2987,20 @@
                 const displayNote = (e.note && String(e.note).trim()) ? e.note : (rawDesc || '-');
                 return `
                 <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
-                    <td class="py-3 px-4 font-medium text-slate-700 whitespace-nowrap">${e.date}</td>
+                    <td class="py-3 px-4 font-medium text-slate-700 whitespace-nowrap">${escapeHtml(e.date)}</td>
                     <td class="py-3 px-4 whitespace-nowrap">
                         <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                            ${e.category}
+                            ${escapeHtml(e.category)}
                         </span>
                     </td>
                     <td class="py-3 px-4 text-slate-600 max-w-xs truncate">${escapeHtml(displayNote)}</td>
                     <td class="py-3 px-4 font-bold text-rose-600 whitespace-nowrap">${formatRupiah(e.amount)}</td>
                     <td class="py-3 px-4 align-middle text-right whitespace-nowrap pr-5">
                         <div class="inline-flex items-center rounded-xl border border-slate-200/90 bg-slate-50/90 p-0.5 gap-0.5 shadow-xs">
-                            <button type="button" onclick="editExpense('${e.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition" title="Edit Pengeluaran">
+                            <button type="button" onclick="editExpense('${escapeHtml(e.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition" title="Edit Pengeluaran">
                                 <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                             </button>
-                            <button type="button" onclick="deleteExpense('${e.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white transition" title="Hapus Pengeluaran">
+                            <button type="button" onclick="deleteExpense('${escapeHtml(e.id)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white transition" title="Hapus Pengeluaran">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
@@ -3368,7 +3368,7 @@
         // Manual Invoice Handlers
         function openInvoiceModal() {
             const sel = document.getElementById('form-invoice-room');
-            sel.innerHTML = roomsData.map(r => `<option value="${r.id}">${r.number} (${r.tenant_name || 'Kosong'})</option>`).join('');
+            sel.innerHTML = roomsData.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} (${escapeHtml(r.tenant_name || 'Kosong')})</option>`).join('');
             document.getElementById('form-invoice').reset();
             document.getElementById('form-invoice-id').value = '';
             document.getElementById('form-invoice-amount-preview').innerText = 'Rp 0';
@@ -3391,7 +3391,7 @@
             const inv = invoicesData.find(i => i.id === id);
             if (!inv) return;
             const sel = document.getElementById('form-invoice-room');
-            sel.innerHTML = roomsData.map(r => `<option value="${r.id}">${r.number} (${r.tenant_name || 'Kosong'})</option>`).join('');
+            sel.innerHTML = roomsData.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} (${escapeHtml(r.tenant_name || 'Kosong')})</option>`).join('');
             sel.value = inv.room_id;
             document.getElementById('form-invoice-id').value = inv.id;
             document.getElementById('form-invoice-month').value = inv.month_year || '';
@@ -3601,11 +3601,11 @@
             document.getElementById('pay-modal-summary').innerHTML = `
                 <div class="flex justify-between">
                     <span class="text-slate-500">Unit & Penghuni:</span>
-                    <span class="font-bold text-slate-800">${inv.room_number} - ${inv.tenant_name || '-'}</span>
+                    <span class="font-bold text-slate-800">${escapeHtml(inv.room_number)} - ${escapeHtml(inv.tenant_name || '-')}</span>
                 </div>
                 <div class="flex justify-between">
                     <span class="text-slate-500">Periode Tagihan Ini:</span>
-                    <span class="font-medium text-slate-700">${periodModalLabel}</span>
+                    <span class="font-medium text-slate-700">${escapeHtml(periodModalLabel)}</span>
                 </div>
                 <div class="flex justify-between">
                     <span class="text-slate-500">Total Tagihan Periode:</span>
@@ -3746,17 +3746,17 @@
                     if (btnDelAll) btnDelAll.classList.remove('hidden');
                     tbody.innerHTML = payments.map(p => `
                         <tr class="hover:bg-slate-50">
-                            <td class="py-2.5 px-3 font-medium text-slate-700">${p.payment_date || '-'}</td>
+                            <td class="py-2.5 px-3 font-medium text-slate-700">${escapeHtml(p.payment_date || '-')}</td>
                             <td class="py-2.5 px-3">
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">${p.payment_method || 'TRANSFER'}</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">${escapeHtml(p.payment_method || 'TRANSFER')}</span>
                             </td>
                             <td class="py-2.5 px-3 text-slate-600 max-w-[160px] truncate">${escapeHtml(p.notes || '-')}</td>
                             <td class="py-2.5 px-3 text-right font-black text-emerald-600">${formatRupiah(p.amount)}</td>
                             <td class="py-2.5 px-3 text-center whitespace-nowrap">
-                                <button type="button" onclick="openEditPaymentModal('${p.id}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded transition mr-1" title="Edit Entri Cicilan">
+                                <button type="button" onclick="openEditPaymentModal('${escapeHtml(p.id)}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded transition mr-1" title="Edit Entri Cicilan">
                                     <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                                 </button>
-                                <button type="button" onclick="deletePaymentEntry('${inv.id}', '${p.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded transition" title="Hapus Entri Pembayaran">
+                                <button type="button" onclick="deletePaymentEntry('${escapeHtml(inv.id)}', '${escapeHtml(p.id)}')" class="p-1 text-slate-400 hover:text-rose-600 rounded transition" title="Hapus Entri Pembayaran">
                                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                 </button>
                             </td>
@@ -3793,7 +3793,7 @@
 
                 lucide.createIcons();
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-500">Gagal memuat data: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
             }
         }
 
@@ -4352,23 +4352,23 @@
                                 </a>
                             ` : ''}
                             ${c.status === 'BARU' ? `
-                                <button onclick="updateComplaintStatus('${c.id}', 'DIPROSES')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg text-xs border border-amber-200">
+                                <button onclick="updateComplaintStatus('${escapeHtml(c.id)}', 'DIPROSES')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg text-xs border border-amber-200">
                                     Proses
                                 </button>
                             ` : ''}
                             ${c.status !== 'SELESAI' ? `
-                                <button onclick="updateComplaintStatus('${c.id}', 'SELESAI')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">
+                                <button onclick="updateComplaintStatus('${escapeHtml(c.id)}', 'SELESAI')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs">
                                     Selesai
                                 </button>
                             ` : `
-                                <button onclick="updateComplaintStatus('${c.id}', 'BARU')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg text-xs" title="Buka Kembali">
+                                <button onclick="updateComplaintStatus('${escapeHtml(c.id)}', 'BARU')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg text-xs" title="Buka Kembali">
                                     Buka Lagi
                                 </button>
                             `}
-                            <button onclick="editComplaint('${c.id}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded-lg" title="Edit Laporan Keluhan">
+                            <button onclick="editComplaint('${escapeHtml(c.id)}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded-lg" title="Edit Laporan Keluhan">
                                 <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                             </button>
-                            <button onclick="deleteComplaint('${c.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded-lg" title="Hapus Laporan">
+                            <button onclick="deleteComplaint('${escapeHtml(c.id)}')" class="p-1 text-slate-400 hover:text-rose-600 rounded-lg" title="Hapus Laporan">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
@@ -4381,7 +4381,7 @@
 
         function openComplaintAdminModal() {
             const sel = document.getElementById('form-complaint-room');
-            sel.innerHTML = roomsData.map(r => `<option value="${r.id}">${r.number} (${r.tenant_name || 'Kosong'})</option>`).join('');
+            sel.innerHTML = roomsData.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} (${escapeHtml(r.tenant_name || 'Kosong')})</option>`).join('');
             document.getElementById('form-complaint-id').value = '';
             document.getElementById('form-complaint-tenant').value = '';
             document.getElementById('form-complaint-phone').value = '';
@@ -4401,7 +4401,7 @@
             const c = complaintsData.find(item => item.id === id);
             if (!c) return;
             const sel = document.getElementById('form-complaint-room');
-            sel.innerHTML = roomsData.map(r => `<option value="${r.id}">${r.number} (${r.tenant_name || 'Kosong'})</option>`).join('');
+            sel.innerHTML = roomsData.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} (${escapeHtml(r.tenant_name || 'Kosong')})</option>`).join('');
             sel.value = c.room_id;
             document.getElementById('form-complaint-id').value = c.id;
             document.getElementById('form-complaint-tenant').value = c.tenant_name || '';
@@ -4529,7 +4529,7 @@
                     const isOver = pct > 100;
                     return `
                     <tr class="hover:bg-slate-50">
-                        <td class="py-2.5 px-3 font-bold text-slate-800">${b.month}</td>
+                        <td class="py-2.5 px-3 font-bold text-slate-800">${escapeHtml(b.month)}</td>
                         <td class="py-2.5 px-3 text-right font-black text-slate-900">${formatRupiah(b.amount)}</td>
                         <td class="py-2.5 px-3 text-right font-semibold text-rose-600">${formatRupiah(b.spent)}</td>
                         <td class="py-2.5 px-3 text-center">
@@ -4538,10 +4538,10 @@
                             </span>
                         </td>
                         <td class="py-2.5 px-3 text-center whitespace-nowrap">
-                            <button onclick="editBudgetRow('${b.month}', ${b.amount})" class="p-1 text-slate-400 hover:text-amber-600 rounded mr-1" title="Edit Anggaran">
+                            <button onclick="editBudgetRow('${escapeHtml(b.month)}', ${Number(b.amount) || 0})" class="p-1 text-slate-400 hover:text-amber-600 rounded mr-1" title="Edit Anggaran">
                                 <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                             </button>
-                            <button onclick="deleteBudgetRow('${b.month}')" class="p-1 text-slate-400 hover:text-rose-600 rounded" title="Hapus Anggaran">
+                            <button onclick="deleteBudgetRow('${escapeHtml(b.month)}')" class="p-1 text-slate-400 hover:text-rose-600 rounded" title="Hapus Anggaran">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
                         </td>
@@ -4550,7 +4550,7 @@
                 }).join('');
                 lucide.createIcons();
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-500">Gagal memuat anggaran: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-500">Gagal memuat anggaran: ${escapeHtml(err.message)}</td></tr>`;
             }
         }
 
@@ -4645,15 +4645,15 @@
 
                 tbody.innerHTML = incomesData.map(inc => `
                     <tr class="hover:bg-slate-50">
-                        <td class="py-2.5 px-3 font-medium text-slate-700">${inc.date}</td>
-                        <td class="py-2.5 px-3 font-bold text-slate-800">${inc.category || 'Pemasukan'}</td>
-                        <td class="py-2.5 px-3 text-slate-600 max-w-xs truncate">${inc.note || '-'}</td>
+                        <td class="py-2.5 px-3 font-medium text-slate-700">${escapeHtml(inc.date)}</td>
+                        <td class="py-2.5 px-3 font-bold text-slate-800">${escapeHtml(inc.category || 'Pemasukan')}</td>
+                        <td class="py-2.5 px-3 text-slate-600 max-w-xs truncate">${escapeHtml(inc.note || '-')}</td>
                         <td class="py-2.5 px-3 text-right font-black text-emerald-600">${formatRupiah(inc.amount)}</td>
                         <td class="py-2.5 px-3 text-center whitespace-nowrap">
-                            <button onclick="editIncomeRow('${inc.id}')" class="p-1 text-slate-400 hover:text-emerald-600 rounded mr-1" title="Edit Pemasukan">
+                            <button onclick="editIncomeRow('${escapeHtml(inc.id)}')" class="p-1 text-slate-400 hover:text-emerald-600 rounded mr-1" title="Edit Pemasukan">
                                 <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                             </button>
-                            <button onclick="deleteIncomeRow('${inc.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded" title="Hapus Pemasukan">
+                            <button onclick="deleteIncomeRow('${escapeHtml(inc.id)}')" class="p-1 text-slate-400 hover:text-rose-600 rounded" title="Hapus Pemasukan">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
                         </td>
@@ -4661,7 +4661,7 @@
                 `).join('');
                 lucide.createIcons();
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-500">Gagal memuat pemasukan: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-rose-500">Gagal memuat pemasukan: ${escapeHtml(err.message)}</td></tr>`;
             }
         }
 

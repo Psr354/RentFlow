@@ -47,6 +47,38 @@ const {
     runReminderCheck
 } = require('../services/scheduler');
 
+function constantTimeCompare(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const hashA = crypto.createHash('sha256').update(a).digest();
+    const hashB = crypto.createHash('sha256').update(b).digest();
+    return crypto.timingSafeEqual(hashA, hashB);
+}
+
+const ALLOWED_SETTING_KEYS = new Set([
+    'app_name',
+    'owner_name',
+    'owner_phone',
+    'owner_address',
+    'bank_name',
+    'bank_account',
+    'bank_holder',
+    'monthly_fee',
+    'due_day',
+    'reminder_h3',
+    'reminder_h1',
+    'reminder_h0',
+    'reminder_h_plus',
+    'auto_billing',
+    'base_url',
+    'smtp_host',
+    'smtp_port',
+    'smtp_user',
+    'smtp_pass',
+    'wa_group_id',
+    'wa_token',
+    'qris_image'
+]);
+
 async function handleRequest(req, res) {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = parsedUrl.pathname;
@@ -105,7 +137,9 @@ async function handleRequest(req, res) {
         readBody(req, res, (body) => {
             try {
                 const data = JSON.parse(body || '{}');
-                if (data.username === APP_USER && data.password === APP_PASS) {
+                const userValid = constantTimeCompare(data.username, APP_USER);
+                const passValid = constantTimeCompare(data.password, APP_PASS);
+                if (userValid && passValid) {
                     const token = createAuthToken(APP_USER);
                     tokens.set(token, Date.now() + (14 * 24 * 60 * 60 * 1000));
                     return send(res, 200, { success: true, token, user: { username: APP_USER, name: 'Administrator' } });
@@ -176,6 +210,9 @@ async function handleRequest(req, res) {
             invoice.tenant_phone = null;
             invoice.tenant_email = null;
 
+            // Selalu hapus access_token dari respons publik agar tidak bocor
+            delete invoice.access_token;
+
             const monthsList = getMonthsList(invoice.month_year);
             invoice.months_list = monthsList;
             invoice.months_label = formatMonthsDisplay(monthsList);
@@ -219,7 +256,7 @@ async function handleRequest(req, res) {
                     // Validasi token tagihan jika bukan admin terotentikasi
                     const sentToken = token || query.token || '';
                     if (!isAuthed(req)) {
-                        if (invoice.access_token && sentToken !== invoice.access_token) {
+                        if (!invoice.access_token || !sentToken || sentToken !== invoice.access_token) {
                             return send(res, 403, { success: false, message: 'Akses ditolak: Token tagihan tidak valid' });
                         }
                     }
@@ -302,7 +339,7 @@ async function handleRequest(req, res) {
                     const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(room_id);
                     if (!room) return send(res, 404, { success: false, message: 'Unit kontrakan tidak ditemukan' });
 
-                    const id = `CMP-${Date.now()}`;
+                    const id = `CMP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
                     let photoUrl = null;
                     if (photo_image) {
                         photoUrl = saveBase64Image(photo_image, `complaint_${id}`);
@@ -345,9 +382,10 @@ async function handleRequest(req, res) {
         }
     }
 
-    // Endpoint berikut memerlukan otentikasi Admin
+    // Endpoint berikut memerlukan otentikasi Admin (kecuali ekspor CSV yang mengizinkan token scope export)
     if (pathname.startsWith('/api/')) {
-        if (!isAuthed(req)) {
+        const isExportCsv = (pathname === '/api/tracefund/export-csv');
+        if (!isAuthed(req, isExportCsv ? 'export' : 'admin')) {
             return send(res, 401, { success: false, message: 'Unauthorized (Sesi telah berakhir atau belum login)' });
         }
     }
@@ -600,7 +638,7 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const inv = JSON.parse(body || '{}');
-                    const id = inv.id || `INV-${Date.now()}`;
+                    const id = inv.id || `INV-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
                     const token = inv.access_token || crypto.randomBytes(12).toString('hex');
                     const stmt = db.prepare(`
                         INSERT INTO invoices (id, room_id, month_year, amount, due_date, status, payment_method, notes, access_token, created_at)
@@ -876,12 +914,15 @@ async function handleRequest(req, res) {
         }
 
         if (req.method === 'DELETE') {
+            db.exec('BEGIN IMMEDIATE;');
             try {
                 db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(id);
                 db.prepare('DELETE FROM notification_logs WHERE invoice_id = ?').run(id);
                 db.prepare('DELETE FROM invoices WHERE id = ?').run(id);
+                db.exec('COMMIT;');
                 return send(res, 200, { success: true, message: 'Tagihan dan seluruh riwayatnya berhasil dihapus' });
             } catch (err) {
+                db.exec('ROLLBACK;');
                 return send(res, 500, { success: false, message: 'Gagal menghapus tagihan: ' + err.message });
             }
         }
@@ -1097,7 +1138,9 @@ async function handleRequest(req, res) {
                     }
 
                     for (const [k, v] of Object.entries(newSettings)) {
-                        setSetting(k, v);
+                        if (ALLOWED_SETTING_KEYS.has(k)) {
+                            setSetting(k, v);
+                        }
                     }
                     return send(res, 200, { success: true, message: 'Pengaturan berhasil disimpan' });
                 } catch (err) {
@@ -1114,7 +1157,9 @@ async function handleRequest(req, res) {
             try {
                 const { test_email } = JSON.parse(body || '{}');
                 const settings = getSettings();
-                if (!test_email) return send(res, 400, { success: false, message: 'Alamat email tujuan harus diisi' });
+                if (!test_email || typeof test_email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(test_email.trim())) {
+                    return send(res, 400, { success: false, message: 'Format alamat email tujuan tidak valid' });
+                }
 
                 const resEm = await sendEmailNotification(
                     settings,
@@ -1154,13 +1199,11 @@ async function handleRequest(req, res) {
     // 13. TRACEFUND API ENDPOINTS
     // 13.1 Analytics Lintas Bulan API
     if (req.method === 'GET' && pathname === '/api/tracefund/analytics') {
-        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
         return send(res, 200, getTraceFundAnalytics());
     }
 
     // 13.2 Unified Transactions dengan Saldo Berjalan API
     if (req.method === 'GET' && pathname === '/api/tracefund/transactions') {
-        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
         const result = getUnifiedTransactions({
             month: query.month,
             year: query.year,
@@ -1172,7 +1215,6 @@ async function handleRequest(req, res) {
 
     // 13.3 Keyword Total Search (Fitur /total TraceFund)
     if (req.method === 'GET' && pathname === '/api/tracefund/total') {
-        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
         const kw = query.keyword || '';
         const result = getUnifiedTransactions({
             keyword: kw,
@@ -1219,7 +1261,6 @@ async function handleRequest(req, res) {
 
     // 13.5 Budgets API (Kelola Batas Anggaran Bulanan)
     if (req.method === 'GET' && pathname === '/api/budgets') {
-        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
         const month = query.month;
         if (month) {
             const b = db.prepare('SELECT * FROM budgets WHERE month = ?').get(month);
@@ -1237,7 +1278,6 @@ async function handleRequest(req, res) {
     }
 
     if (req.method === 'POST' && pathname === '/api/budgets') {
-        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
         let body;
         try {
             body = await parseJsonBody(req);
@@ -1264,7 +1304,6 @@ async function handleRequest(req, res) {
     }
 
     if (pathname.startsWith('/api/budgets') && req.method === 'DELETE') {
-        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
         let month = query.month;
         if (!month && pathname.startsWith('/api/budgets/')) {
             month = decodeURIComponent(pathname.replace('/api/budgets/', '')).trim();
@@ -1278,7 +1317,6 @@ async function handleRequest(req, res) {
 
     // 13.6 General Incomes API (Pemasukan Non-Sewa)
     if (req.method === 'GET' && pathname === '/api/incomes') {
-        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
         const month = query.month;
         let rows;
         if (month) {
@@ -1290,7 +1328,6 @@ async function handleRequest(req, res) {
     }
 
     if (req.method === 'POST' && pathname === '/api/incomes') {
-        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
         let body;
         try {
             body = await parseJsonBody(req);
@@ -1316,7 +1353,6 @@ async function handleRequest(req, res) {
     }
 
     if (pathname.startsWith('/api/incomes/')) {
-        if (!isAuthed(req)) return send(res, 401, { success: false, message: 'Unauthorized' });
         const id = decodeURIComponent(pathname.replace('/api/incomes/', ''));
 
         if (req.method === 'PUT') {

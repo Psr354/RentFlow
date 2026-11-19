@@ -1,5 +1,6 @@
 const { db, getSettings } = require('../config/database');
 const { getTodayWIB, getHourWIB, getDueDateDetails, getOverdueDetails, getMonthsList, formatMonthsDisplay } = require('../utils/time');
+const { escapeHtml } = require('../utils/security');
 const { sendUnifiedWhatsApp } = require('./whatsapp');
 const { generateMonthlyInvoices } = require('./billing');
 
@@ -59,13 +60,21 @@ async function sendEmailNotification(settings, toEmail, subject, htmlContent) {
 
 function buildEmailHtml(settings, inv, payUrl, milestone) {
     const formattedAmount = Number(inv.amount).toLocaleString('id-ID');
-    const appName = settings.app_name || 'Kontrakan Nenek Yuyun';
-    const ownerName = settings.owner_name || 'Pengelola Kontrakan';
-    const ownerPhone = settings.owner_phone || '-';
-    const ownerAddress = settings.owner_address || '-';
-    const bankName = settings.bank_name || 'BCA';
-    const bankAccount = settings.bank_account || '-';
-    const bankHolder = settings.bank_holder || ownerName;
+    const appName = escapeHtml(settings.app_name || 'Kontrakan Nenek Yuyun');
+    const ownerName = escapeHtml(settings.owner_name || 'Pengelola Kontrakan');
+    const ownerPhone = escapeHtml(settings.owner_phone || '-');
+    const ownerAddress = escapeHtml(settings.owner_address || '-');
+    const bankName = escapeHtml(settings.bank_name || 'BCA');
+    const bankAccount = escapeHtml(settings.bank_account || '-');
+    const bankHolder = escapeHtml(settings.bank_holder || ownerName);
+
+    const safeTenant = escapeHtml(inv.tenant_name || 'Penghuni');
+    const safeInvId = escapeHtml(inv.id);
+    const safeRoomNumber = escapeHtml(inv.room_number);
+    const safeMonthYear = escapeHtml(inv.month_year);
+    const safeDueDate = escapeHtml(inv.due_date);
+    const safeMilestone = milestone ? escapeHtml(milestone) : null;
+    const safePayUrl = escapeHtml(payUrl);
 
     return `
 <!DOCTYPE html>
@@ -84,36 +93,36 @@ function buildEmailHtml(settings, inv, payUrl, milestone) {
 
         <div style="padding: 28px 24px;">
             <p style="margin: 0 0 12px; font-size: 15px; color: #334155;">
-                Halo <strong>${inv.tenant_name || 'Penghuni'}</strong>,
+                Halo <strong>${safeTenant}</strong>,
             </p>
             <p style="margin: 0 0 20px; font-size: 13.5px; line-height: 1.6; color: #475569;">
-                Berikut adalah rincian tagihan sewa unit kontrakan Anda untuk periode <strong>${inv.month_year}</strong>:
+                Berikut adalah rincian tagihan sewa unit kontrakan Anda untuk periode <strong>${safeMonthYear}</strong>:
             </p>
 
             <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                     <tr>
                         <td style="padding: 6px 0; color: #64748b;">No. Tagihan</td>
-                        <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a; font-family: monospace;">${inv.id}</td>
+                        <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a; font-family: monospace;">${safeInvId}</td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 0; color: #64748b;">Unit Kontrakan</td>
-                        <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a;">${inv.room_number}</td>
+                        <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a;">${safeRoomNumber}</td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 0; color: #64748b;">Periode Sewa</td>
-                        <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a;">${inv.month_year}</td>
+                        <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a;">${safeMonthYear}</td>
                     </tr>
                     <tr>
                         <td style="padding: 6px 0; color: #64748b;">Jatuh Tempo</td>
-                        <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #e11d48;">${inv.due_date}</td>
+                        <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #e11d48;">${safeDueDate}</td>
                     </tr>
-                    ${milestone ? `
+                    ${safeMilestone ? `
                     <tr>
                         <td style="padding: 6px 0; color: #64748b;">Status</td>
                         <td style="padding: 6px 0; text-align: right;">
                             <span style="display: inline-block; background-color: #fef3c7; color: #92400e; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 9999px;">
-                                ${milestone}
+                                ${safeMilestone}
                             </span>
                         </td>
                     </tr>` : ''}
@@ -127,7 +136,7 @@ function buildEmailHtml(settings, inv, payUrl, milestone) {
             </div>
 
             <div style="text-align: center; margin: 28px 0;">
-                <a href="${payUrl}" style="background-color: #4338ca; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(67, 56, 202, 0.25);">
+                <a href="${safePayUrl}" style="background-color: #4338ca; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(67, 56, 202, 0.25);">
                     Buka Tagihan & Pembayaran
                 </a>
             </div>
@@ -287,11 +296,11 @@ function startBackgroundSchedulers() {
 }
 
 function buildSystemNoticeEmailHtml(settings) {
-    const appName = settings.app_name || 'Kontrakan Nenek Yuyun';
-    const ownerName = settings.owner_name || 'Pengelola Kontrakan';
-    const ownerPhone = settings.owner_phone || '-';
-    const ownerAddress = settings.owner_address || '-';
-    const baseUrl = settings.base_url || 'https://sekeluarga.web.id';
+    const appName = escapeHtml(settings.app_name || 'Kontrakan Nenek Yuyun');
+    const ownerName = escapeHtml(settings.owner_name || 'Pengelola Kontrakan');
+    const ownerPhone = escapeHtml(settings.owner_phone || '-');
+    const ownerAddress = escapeHtml(settings.owner_address || '-');
+    const baseUrl = escapeHtml(settings.base_url || 'https://sekeluarga.web.id');
 
     return `
 <!DOCTYPE html>

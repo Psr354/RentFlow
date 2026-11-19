@@ -132,6 +132,23 @@ function allocatePaymentFIFO({ roomId, amount, paymentMethod = 'TRANSFER', payme
                 recalculateInvoiceStatus(targetInvoiceId, true);
             }
         }
+
+        const excess = remainingToAllocate - totalAllocated;
+        if (excess > 0) {
+            const excessIncId = `INC-EXCESS-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+            const invTag = targetInvoiceId ? ` tagihan ${targetInvoiceId}` : '';
+            db.prepare(`
+                INSERT INTO general_incomes (id, date, category, amount, note, created_at)
+                VALUES (?, ?, 'Titipan Sewa', ?, ?, ?)
+            `).run(
+                excessIncId,
+                payDate,
+                excess,
+                `Kelebihan pembayaran sewa Unit ${room.number} (${room.tenant_name || '-'})${invTag}`,
+                timestamp
+            );
+        }
+
         db.exec('COMMIT;');
     } catch (err) {
         db.exec('ROLLBACK;');
@@ -155,7 +172,7 @@ function allocatePaymentFIFO({ roomId, amount, paymentMethod = 'TRANSFER', payme
 
     const excess = remainingToAllocate - totalAllocated;
     if (excess > 0) {
-        message += `\n(Catatan: Terdapat kelebihan dana Rp ${excess.toLocaleString('id-ID')} karena seluruh tagihan unit ini telah lunas).`;
+        message += `\n(Catatan: Terdapat kelebihan dana Rp ${excess.toLocaleString('id-ID')} yang otomatis dicatat ke Kas Pemasukan Titipan Sewa).`;
     }
 
     return {
@@ -244,16 +261,23 @@ function generateMonthlyInvoices(targetMonthYear = null, targetDueYm = null) {
         VALUES (?, ?, ?, ?, ?, 'BELUM_BAYAR', ?, ?)
     `);
 
-    for (const r of occupiedRooms) {
-        const exists = db.prepare('SELECT id FROM invoices WHERE room_id = ? AND month_year = ?').get(r.id, month_year);
-        if (!exists) {
-            const dayStr = String(r.due_day || 1).padStart(2, '0');
-            const dueDate = `${ym}-${dayStr}`;
-            const invId = `INV-${ym.replace('-', '')}-${r.number.replace(/\s+/g, '').toUpperCase()}`;
-            const token = crypto.randomBytes(12).toString('hex');
-            insertStmt.run(invId, r.id, month_year, r.price, dueDate, token, new Date().toISOString());
-            createdCount++;
+    db.exec('BEGIN IMMEDIATE;');
+    try {
+        for (const r of occupiedRooms) {
+            const exists = db.prepare('SELECT id FROM invoices WHERE room_id = ? AND month_year = ?').get(r.id, month_year);
+            if (!exists) {
+                const dayStr = String(r.due_day || 1).padStart(2, '0');
+                const dueDate = `${ym}-${dayStr}`;
+                const invId = `INV-${ym.replace('-', '')}-${r.number.replace(/\s+/g, '').toUpperCase()}-${crypto.randomBytes(4).toString('hex')}`;
+                const token = crypto.randomBytes(12).toString('hex');
+                insertStmt.run(invId, r.id, month_year, r.price, dueDate, token, new Date().toISOString());
+                createdCount++;
+            }
         }
+        db.exec('COMMIT;');
+    } catch (err) {
+        db.exec('ROLLBACK;');
+        throw err;
     }
 
     return {
