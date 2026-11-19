@@ -393,7 +393,7 @@
                                         <th class="py-3.5 px-4 whitespace-nowrap">Periode Sewa</th>
                                         <th class="py-3.5 px-4 whitespace-nowrap">Jatuh Tempo & Keterlambatan</th>
                                         <th class="py-3.5 px-4 whitespace-nowrap">Sisa Tagihan</th>
-                                        <th class="py-3.5 px-4 text-center whitespace-nowrap">Aksi Cepat</th>
+                                        <th class="py-3.5 px-4 text-right whitespace-nowrap pr-5">Aksi Cepat</th>
                                     </tr>
                                 </thead>
                                 <tbody id="dashboard-overdue-body" class="divide-y divide-slate-100 text-xs">
@@ -497,19 +497,78 @@
                     </div>
 
                     <!-- Search & Filter Bar Tagihan -->
-                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
-                        <div class="relative flex-1 min-w-[220px]">
-                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                                <i data-lucide="search" class="w-4 h-4"></i>
-                            </span>
-                            <input type="text" id="search-invoices-input" oninput="handleInvoiceSearch(this.value)" placeholder="Cari nomor invoice, unit (21.A), atau nama penghuni..." class="w-full pl-9 pr-4 py-2 border rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2.5">
+                            <!-- Sisi Kiri: Search Input Ramping & Filter Periode Bulan/Tahun -->
+                            <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
+                                <!-- Search Input Dikecilkan -->
+                                <div class="relative w-48 sm:w-56">
+                                    <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                                        <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                                    </span>
+                                    <input type="text" id="search-invoices-input" oninput="handleInvoiceSearch(this.value)" placeholder="Cari unit / penghuni..." class="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                </div>
+
+                                <!-- Filter Dropdown Bulan -->
+                                <div class="relative">
+                                    <select id="filter-invoice-month" onchange="handleInvoicePeriodFilter()" class="pl-2.5 pr-7 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer">
+                                        <option value="ALL">Semua Bulan</option>
+                                        <option value="Januari">Januari</option>
+                                        <option value="Februari">Februari</option>
+                                        <option value="Maret">Maret</option>
+                                        <option value="April">April</option>
+                                        <option value="Mei">Mei</option>
+                                        <option value="Juni">Juni</option>
+                                        <option value="Juli">Juli</option>
+                                        <option value="Agustus">Agustus</option>
+                                        <option value="September">September</option>
+                                        <option value="Oktober">Oktober</option>
+                                        <option value="November">November</option>
+                                        <option value="Desember">Desember</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                                        <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Filter Dropdown Tahun -->
+                                <div class="relative">
+                                    <select id="filter-invoice-year" onchange="handleInvoicePeriodFilter()" class="pl-2.5 pr-7 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer">
+                                        <option value="ALL">Semua Tahun</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                                        <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Shortcut Tombol: Bulan Ini & Reset -->
+                                <button type="button" onclick="setInvoicePeriodThisMonth()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 text-xs font-bold rounded-xl transition whitespace-nowrap" title="Filter Tagihan Bulan Ini">
+                                    Bulan Ini
+                                </button>
+                                <button type="button" id="btn-reset-invoice-filter" onclick="resetInvoiceFilters()" class="hidden px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition whitespace-nowrap" title="Reset Semua Filter & Pencarian">
+                                    Reset
+                                </button>
+                            </div>
+
+                            <!-- Sisi Kanan: Status Tagihan Chips -->
+                            <div class="flex items-center gap-1 flex-wrap">
+                                <button onclick="filterInvoices('ALL')" id="filter-inv-all" class="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white">Semua (<span id="count-inv-all">0</span>)</button>
+                                <button onclick="filterInvoices('BELUM_BAYAR')" id="filter-inv-unpaid" class="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Belum Bayar (<span id="count-inv-unpaid">0</span>)</button>
+                                <button onclick="filterInvoices('SEBAGIAN')" id="filter-inv-partial" class="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Dicicil (<span id="count-inv-partial">0</span>)</button>
+                                <button onclick="filterInvoices('MENUNGGU_VERIFIKASI')" id="filter-inv-pending" class="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Verifikasi (<span id="count-inv-pending">0</span>)</button>
+                                <button onclick="filterInvoices('LUNAS')" id="filter-inv-paid" class="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Lunas (<span id="count-inv-paid">0</span>)</button>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <button onclick="filterInvoices('ALL')" id="filter-inv-all" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white">Semua (<span id="count-inv-all">0</span>)</button>
-                            <button onclick="filterInvoices('BELUM_BAYAR')" id="filter-inv-unpaid" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Belum Bayar (<span id="count-inv-unpaid">0</span>)</button>
-                            <button onclick="filterInvoices('SEBAGIAN')" id="filter-inv-partial" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Dicicil (<span id="count-inv-partial">0</span>)</button>
-                            <button onclick="filterInvoices('MENUNGGU_VERIFIKASI')" id="filter-inv-pending" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Menunggu Verifikasi (<span id="count-inv-pending">0</span>)</button>
-                            <button onclick="filterInvoices('LUNAS')" id="filter-inv-paid" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Lunas (<span id="count-inv-paid">0</span>)</button>
+
+                        <!-- Info Banner Ketika Filter Periode Aktif -->
+                        <div id="invoice-filter-badge" class="hidden flex items-center justify-between px-3 py-1.5 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-900">
+                            <span class="flex items-center gap-1.5 font-medium">
+                                <i data-lucide="calendar" class="w-3.5 h-3.5 text-indigo-600"></i>
+                                <span>Menampilkan tagihan periode: <strong id="invoice-filter-badge-text"></strong></span>
+                            </span>
+                            <button type="button" onclick="resetInvoiceFilters()" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline">
+                                Tampilkan Semua Periode
+                            </button>
                         </div>
                     </div>
 
@@ -525,7 +584,7 @@
                                         <th class="py-3.5 px-4 whitespace-nowrap">Total & Masuk</th>
                                         <th class="py-3.5 px-4 whitespace-nowrap">Sisa Tagihan</th>
                                         <th class="py-3.5 px-4 text-center whitespace-nowrap">Status</th>
-                                        <th class="py-3.5 px-4 text-center whitespace-nowrap">Aksi</th>
+                                        <th class="py-3.5 px-4 text-right whitespace-nowrap pr-5">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody id="invoices-table-body" class="divide-y divide-slate-100 text-xs">
@@ -562,24 +621,74 @@
                         </div>
                     </div>
 
-                    <!-- Pencarian Cepat Pengeluaran Berdasarkan Kata Kunci (Fitur /total TraceFund) -->
-                    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-                        <div class="flex items-center gap-2">
-                            <div class="relative flex-1">
-                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                                    <i data-lucide="search" class="w-4 h-4"></i>
-                                </span>
-                                <input type="text" id="tracefund-search-input" oninput="handleTraceFundSearch(this.value)" placeholder="Pencarian cepat barang / kata kunci TraceFund (contoh: suster, token, sanyo, semen, sampah)..." class="w-full pl-9 pr-4 py-2 border rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <!-- Search & Filter Bar Pengeluaran -->
+                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2.5">
+                            <!-- Sisi Kiri: Search Input Ramping & Filter Periode Bulan/Tahun -->
+                            <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
+                                <!-- Search Input Dikecilkan -->
+                                <div class="relative w-52 sm:w-64">
+                                    <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                                        <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                                    </span>
+                                    <input type="text" id="tracefund-search-input" oninput="handleTraceFundSearch(this.value)" placeholder="Cari barang / kata kunci (token, suster)..." class="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                </div>
+
+                                <!-- Filter Dropdown Bulan -->
+                                <div class="relative">
+                                    <select id="filter-expense-month" onchange="handleExpensePeriodFilter()" class="pl-2.5 pr-7 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer">
+                                        <option value="ALL">Semua Bulan</option>
+                                        <option value="Januari">Januari</option>
+                                        <option value="Februari">Februari</option>
+                                        <option value="Maret">Maret</option>
+                                        <option value="April">April</option>
+                                        <option value="Mei">Mei</option>
+                                        <option value="Juni">Juni</option>
+                                        <option value="Juli">Juli</option>
+                                        <option value="Agustus">Agustus</option>
+                                        <option value="September">September</option>
+                                        <option value="Oktober">Oktober</option>
+                                        <option value="November">November</option>
+                                        <option value="Desember">Desember</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                                        <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Filter Dropdown Tahun -->
+                                <div class="relative">
+                                    <select id="filter-expense-year" onchange="handleExpensePeriodFilter()" class="pl-2.5 pr-7 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer">
+                                        <option value="ALL">Semua Tahun</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                                        <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Shortcut Tombol: Bulan Ini & Reset -->
+                                <button type="button" onclick="setExpensePeriodThisMonth()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 text-xs font-bold rounded-xl transition whitespace-nowrap" title="Filter Pengeluaran Bulan Ini">
+                                    Bulan Ini
+                                </button>
+                                <button type="button" id="btn-reset-expense-filter" onclick="resetTraceFundSearch()" class="hidden px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition whitespace-nowrap" title="Reset Semua Filter & Pencarian">
+                                    Reset
+                                </button>
                             </div>
-                            <button type="button" onclick="resetTraceFundSearch()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition">
-                                Reset
-                            </button>
+
+                            <!-- Sisi Kanan: Total Pengeluaran Badge -->
+                            <div class="flex items-center gap-2">
+                                <div class="px-3 py-1.5 bg-rose-50 border border-rose-200 rounded-xl text-xs flex items-center gap-1.5">
+                                    <span class="text-rose-600 font-medium">Total:</span>
+                                    <strong id="expense-total-display" class="font-bold text-rose-700">Rp 0</strong>
+                                    <span class="text-rose-400 text-[10px] font-normal">(<span id="expense-count-display">0</span> transaksi)</span>
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Search Result Summary Badge -->
-                        <div id="tracefund-search-badge" class="hidden flex items-center justify-between p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs">
+                        <!-- Info Banner Ketika Filter Periode atau Pencarian Aktif -->
+                        <div id="tracefund-search-badge" class="hidden flex items-center justify-between px-3 py-1.5 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-900">
                             <div class="flex items-center gap-2 text-indigo-900 font-medium">
-                                <i data-lucide="info" class="w-4 h-4 text-indigo-600 flex-shrink-0"></i>
+                                <i data-lucide="info" class="w-3.5 h-3.5 text-indigo-600 flex-shrink-0"></i>
                                 <span id="tracefund-search-badge-text">Ditemukan 0 transaksi</span>
                             </div>
                             <button type="button" onclick="resetTraceFundSearch()" class="text-xs font-bold text-indigo-700 hover:underline">
@@ -590,14 +699,14 @@
 
                     <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
                         <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse">
+                            <table class="w-full text-left border-collapse min-w-[700px]">
                                 <thead>
                                     <tr class="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                                         <th class="py-3 px-4">Tanggal</th>
                                         <th class="py-3 px-4">Kategori</th>
                                         <th class="py-3 px-4">Keterangan</th>
                                         <th class="py-3 px-4">Jumlah (Rp)</th>
-                                        <th class="py-3 px-4 text-center">Aksi</th>
+                                        <th class="py-3 px-4 text-right pr-5">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody id="expenses-table-body" class="divide-y divide-slate-100 text-xs">
@@ -1055,9 +1164,21 @@
                     <label class="block text-xs font-semibold text-slate-700 mb-1">Status Pembayaran</label>
                     <select id="form-invoice-status" class="w-full px-3.5 py-2 border rounded-xl text-xs font-bold">
                         <option value="BELUM_BAYAR">BELUM_BAYAR</option>
+                        <option value="SEBAGIAN">SEBAGIAN (Dicicil)</option>
                         <option value="MENUNGGU_VERIFIKASI">MENUNGGU_VERIFIKASI</option>
                         <option value="LUNAS">LUNAS</option>
                     </select>
+                </div>
+                <div id="form-invoice-installment-info" class="hidden p-3 rounded-xl bg-purple-50 border border-purple-200 text-xs text-purple-900 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold flex items-center gap-1.5">
+                            <i data-lucide="info" class="w-4 h-4 text-purple-600"></i> Memiliki Riwayat Cicilan
+                        </span>
+                        <button type="button" onclick="handleOpenInstallmentsFromInvoiceModal()" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-sm transition">
+                            <i data-lucide="receipt" class="w-3.5 h-3.5"></i> Kelola / Hapus Cicilan
+                        </button>
+                    </div>
+                    <p id="form-invoice-installment-text" class="text-[11px] text-purple-700 leading-relaxed"></p>
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-700 mb-1">Catatan</label>
@@ -1351,9 +1472,14 @@
             </div>
 
             <div class="flex justify-between items-center pt-2">
-                <button type="button" id="btn-add-another-installment" class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-emerald-200 transition">
-                    <i data-lucide="plus" class="w-4 h-4"></i> Tambah Cicilan / Bayar
-                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="btn-add-another-installment" class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-emerald-200 transition">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Tambah Cicilan / Bayar
+                    </button>
+                    <button type="button" id="btn-delete-all-installments" onclick="handleDeleteAllInstallments()" class="hidden px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-rose-200 transition" title="Hapus seluruh riwayat cicilan untuk tagihan ini">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Hapus Semua Cicilan
+                    </button>
+                </div>
                 <button type="button" onclick="closeInstallmentsModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">
                     Tutup
                 </button>
@@ -1594,6 +1720,11 @@
         let complaintsData = [];
         let settingsData = {};
         let activeInvoiceFilter = 'ALL';
+        let activeInvoiceMonthFilter = 'ALL';
+        let activeInvoiceYearFilter = 'ALL';
+        let activeExpenseMonthFilter = 'ALL';
+        let activeExpenseYearFilter = 'ALL';
+        let expenseSearchQuery = '';
         let activeComplaintFilter = 'ALL';
         let currentBase64Qris = '';
 
@@ -2078,14 +2209,25 @@
                             <div class="font-bold ${paid > 0 ? 'text-amber-700' : 'text-slate-900'} text-xs">${formatRupiah(remaining)}</div>
                             ${paid > 0 ? `<div class="text-[10px] font-semibold text-emerald-600 mt-0.5">Sudah masuk: ${formatRupiah(paid)}</div>` : ''}
                         </td>
-                        <td class="py-3.5 px-4 align-middle text-center whitespace-nowrap">
-                            <div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
-                                <button type="button" onclick="openPaymentModal('${inv.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition" title="Catat Cicilan atau Lunasi">
+                        <td class="py-3.5 px-4 align-middle text-right whitespace-nowrap pr-5">
+                            <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                <button type="button" onclick="openPaymentModal('${inv.id}')" class="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition" title="Catat Cicilan atau Lunasi">
                                     <i data-lucide="credit-card" class="w-3.5 h-3.5"></i> Bayar
                                 </button>
-                                <button type="button" onclick="sendInvoiceReminder('${inv.id}', 'both')" class="p-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold rounded-xl text-xs flex items-center border border-sky-200 transition" title="Kirim Notifikasi Otomatis via Bot WA & Email">
-                                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                                </button>
+                                <div class="h-8 inline-flex items-center rounded-xl border border-slate-200/90 bg-slate-50/90 p-0.5 gap-0.5 shadow-xs">
+                                    <button type="button" onclick="sendInvoiceReminder('${inv.id}', 'both')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-sky-600 hover:bg-white transition" title="Kirim Notifikasi Otomatis via Bot WA & Email">
+                                        <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                    ${(inv.payment_count > 0 || paid > 0) ? `
+                                        <button type="button" onclick="openInstallmentsModal('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-purple-600 hover:text-purple-700 hover:bg-white transition" title="Lihat & Kelola Cicilan (${inv.payment_count || 1}x)">
+                                            <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    ` : ''}
+                                    <span class="w-px h-3.5 bg-slate-200/80 mx-0.5"></span>
+                                    <button type="button" onclick="editInvoice('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition" title="Edit Tagihan">
+                                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
                             </div>
                         </td>
                     </tr>`;
@@ -2287,15 +2429,172 @@
 
         function handleInvoiceSearch(val) {
             invoiceSearchQuery = (val || '').toLowerCase().trim();
+            updateInvoiceFilterBadge();
             renderInvoices();
         }
 
+        function populateInvoiceYearOptions() {
+            const yearSelect = document.getElementById('filter-invoice-year');
+            if (!yearSelect) return;
+            const currentVal = yearSelect.value || activeInvoiceYearFilter || 'ALL';
+            const yearsSet = new Set();
+            const currentYear = new Date().getFullYear();
+            yearsSet.add(currentYear);
+
+            invoicesData.forEach(inv => {
+                if (inv.due_date) {
+                    const y = inv.due_date.slice(0, 4);
+                    if (/^\d{4}$/.test(y)) yearsSet.add(parseInt(y, 10));
+                }
+                if (inv.month_year) {
+                    const matches = inv.month_year.match(/\b(20\d{2})\b/g);
+                    if (matches) matches.forEach(m => yearsSet.add(parseInt(m, 10)));
+                }
+            });
+
+            const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
+            const currentOptionsKey = sortedYears.join(',');
+            if (yearSelect.dataset.renderedYears !== currentOptionsKey) {
+                yearSelect.dataset.renderedYears = currentOptionsKey;
+                let optionsHtml = '<option value="ALL">Semua Tahun</option>';
+                sortedYears.forEach(y => {
+                    optionsHtml += `<option value="${y}">${y}</option>`;
+                });
+                yearSelect.innerHTML = optionsHtml;
+                yearSelect.value = currentVal;
+            }
+        }
+
+        function matchesInvoicePeriod(inv, month, year) {
+            if (month === 'ALL' && year === 'ALL') return true;
+
+            const mList = Array.isArray(inv.months_list) && inv.months_list.length > 0 
+                ? inv.months_list 
+                : (inv.month_year ? [inv.month_year] : []);
+            const monthYearStr = (inv.month_year || '').toLowerCase();
+            const dueDateStr = inv.due_date || '';
+
+            // 1. Cek kecocokan Tahun
+            if (year !== 'ALL') {
+                const yearStr = String(year);
+                const hasYear = monthYearStr.includes(yearStr) || 
+                                dueDateStr.startsWith(yearStr) || 
+                                mList.some(m => String(m).includes(yearStr));
+                if (!hasYear) return false;
+            }
+
+            // 2. Cek kecocokan Bulan
+            if (month !== 'ALL') {
+                const monthStr = month.toLowerCase();
+
+                // Jika filter tahun juga dipilih, cek kombinasi spesifik misal "november 2026"
+                if (year !== 'ALL') {
+                    const combo = `${monthStr} ${year}`.toLowerCase();
+                    const matchCombo = mList.some(m => String(m).toLowerCase().includes(combo)) || 
+                                       (monthYearStr.includes(monthStr) && monthYearStr.includes(String(year)));
+                    if (matchCombo) return true;
+                }
+
+                // Cek nama bulan di months_list atau string month_year
+                const matchMonthName = monthYearStr.includes(monthStr) || 
+                                       mList.some(m => String(m).toLowerCase().includes(monthStr));
+                if (matchMonthName) return true;
+
+                // Fallback cek bulan jatuh tempo
+                const indonesianMonths = ['januari', 'februari', 'maret', 'april', 'mei', 'juni', 'juli', 'agustus', 'september', 'oktober', 'november', 'desember'];
+                const mIdx = indonesianMonths.indexOf(monthStr);
+                if (mIdx !== -1 && dueDateStr) {
+                    const parts = dueDateStr.split('-');
+                    if (parts.length >= 2 && parseInt(parts[1], 10) === (mIdx + 1)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        function handleInvoicePeriodFilter() {
+            const monthEl = document.getElementById('filter-invoice-month');
+            const yearEl = document.getElementById('filter-invoice-year');
+            activeInvoiceMonthFilter = monthEl ? monthEl.value : 'ALL';
+            activeInvoiceYearFilter = yearEl ? yearEl.value : 'ALL';
+            updateInvoiceFilterBadge();
+            renderInvoices();
+        }
+
+        function setInvoicePeriodThisMonth() {
+            const now = new Date();
+            const indonesianMonths = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            const curMonthName = indonesianMonths[now.getMonth()];
+            const curYear = String(now.getFullYear());
+
+            const monthEl = document.getElementById('filter-invoice-month');
+            const yearEl = document.getElementById('filter-invoice-year');
+            if (monthEl) monthEl.value = curMonthName;
+            if (yearEl) yearEl.value = curYear;
+
+            activeInvoiceMonthFilter = curMonthName;
+            activeInvoiceYearFilter = curYear;
+            updateInvoiceFilterBadge();
+            renderInvoices();
+        }
+
+        function resetInvoiceFilters() {
+            const monthEl = document.getElementById('filter-invoice-month');
+            const yearEl = document.getElementById('filter-invoice-year');
+            const searchEl = document.getElementById('search-invoices-input');
+            if (monthEl) monthEl.value = 'ALL';
+            if (yearEl) yearEl.value = 'ALL';
+            if (searchEl) searchEl.value = '';
+
+            invoiceSearchQuery = '';
+            activeInvoiceMonthFilter = 'ALL';
+            activeInvoiceYearFilter = 'ALL';
+            updateInvoiceFilterBadge();
+            renderInvoices();
+        }
+
+        function updateInvoiceFilterBadge() {
+            const badge = document.getElementById('invoice-filter-badge');
+            const badgeText = document.getElementById('invoice-filter-badge-text');
+            const resetBtn = document.getElementById('btn-reset-invoice-filter');
+
+            const isPeriodFiltered = activeInvoiceMonthFilter !== 'ALL' || activeInvoiceYearFilter !== 'ALL';
+            if (resetBtn) {
+                if (isPeriodFiltered || invoiceSearchQuery) {
+                    resetBtn.classList.remove('hidden');
+                } else {
+                    resetBtn.classList.add('hidden');
+                }
+            }
+
+            if (!badge || !badgeText) return;
+            if (isPeriodFiltered) {
+                let label = '';
+                if (activeInvoiceMonthFilter !== 'ALL' && activeInvoiceYearFilter !== 'ALL') {
+                    label = `${activeInvoiceMonthFilter} ${activeInvoiceYearFilter}`;
+                } else if (activeInvoiceMonthFilter !== 'ALL') {
+                    label = `Bulan ${activeInvoiceMonthFilter} (Semua Tahun)`;
+                } else {
+                    label = `Tahun ${activeInvoiceYearFilter} (Semua Bulan)`;
+                }
+                badgeText.innerText = label;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
         function updateInvoiceFilterCounts() {
-            const total = invoicesData.length;
-            const unpaid = invoicesData.filter(i => i.status === 'BELUM_BAYAR').length;
-            const partial = invoicesData.filter(i => i.status === 'SEBAGIAN').length;
-            const pending = invoicesData.filter(i => i.status === 'MENUNGGU_VERIFIKASI').length;
-            const paid = invoicesData.filter(i => i.status === 'LUNAS').length;
+            const periodFiltered = invoicesData.filter(i => matchesInvoicePeriod(i, activeInvoiceMonthFilter, activeInvoiceYearFilter));
+            const total = periodFiltered.length;
+            const unpaid = periodFiltered.filter(i => i.status === 'BELUM_BAYAR').length;
+            const partial = periodFiltered.filter(i => i.status === 'SEBAGIAN').length;
+            const pending = periodFiltered.filter(i => i.status === 'MENUNGGU_VERIFIKASI').length;
+            const paid = periodFiltered.filter(i => i.status === 'LUNAS').length;
 
             const setEl = (id, count) => {
                 const el = document.getElementById(id);
@@ -2312,20 +2611,26 @@
             activeInvoiceFilter = status;
             ['all', 'unpaid', 'partial', 'pending', 'paid'].forEach(k => {
                 const el = document.getElementById(`filter-inv-${k}`);
-                if (el) el.className = "px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100";
+                if (el) el.className = "px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100";
             });
             const mapKey = { 'ALL': 'all', 'BELUM_BAYAR': 'unpaid', 'SEBAGIAN': 'partial', 'MENUNGGU_VERIFIKASI': 'pending', 'LUNAS': 'paid' };
             const activeEl = document.getElementById(`filter-inv-${mapKey[status]}`);
-            if (activeEl) activeEl.className = "px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white";
+            if (activeEl) activeEl.className = "px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white";
             renderInvoices();
         }
 
         function renderInvoices() {
+            populateInvoiceYearOptions();
             updateInvoiceFilterCounts();
+            updateInvoiceFilterBadge();
             const tbody = document.getElementById('invoices-table-body');
             const filtered = invoicesData.filter(i => {
                 const matchStatus = activeInvoiceFilter === 'ALL' || i.status === activeInvoiceFilter;
                 if (!matchStatus) return false;
+
+                const matchPeriod = matchesInvoicePeriod(i, activeInvoiceMonthFilter, activeInvoiceYearFilter);
+                if (!matchPeriod) return false;
+
                 if (!invoiceSearchQuery) return true;
                 const q = invoiceSearchQuery;
                 const invId = (i.id || '').toLowerCase();
@@ -2336,7 +2641,8 @@
             });
 
             if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-400 italic">Belum ada tagihan pada filter ini.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-400 italic">Tidak ada tagihan yang cocok dengan filter atau kata kunci pencarian.</td></tr>`;
+                lucide.createIcons();
                 return;
             }
 
@@ -2463,41 +2769,59 @@
                         <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap ${statusStyles[inv.status] || 'bg-slate-100 text-slate-600 border border-slate-200'}">
                             ${statusLabels[inv.status] || inv.status}
                         </span>
-                        ${inv.payment_count > 0 ? `<div class="mt-1 text-[10px] text-slate-500 font-medium">${inv.payment_count}x cicilan</div>` : ''}
+                        ${inv.payment_count > 0 ? `
+                            <div class="mt-1">
+                                <button type="button" onclick="openInstallmentsModal('${inv.id}')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 transition" title="Buka Riwayat Cicilan">
+                                    <i data-lucide="receipt" class="w-3 h-3 text-purple-600"></i> ${inv.payment_count}x cicilan
+                                </button>
+                            </div>
+                        ` : ''}
                     </td>
-                    <td class="py-4 px-4 align-middle text-center whitespace-nowrap">
-                        <div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                    <td class="py-4 px-4 align-middle text-right whitespace-nowrap pr-5">
+                        <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
                             ${inv.status !== 'LUNAS' ? `
-                                <button type="button" onclick="openPaymentModal('${inv.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition" title="Catat Pembayaran atau Cicilan">
+                                <button type="button" onclick="openPaymentModal('${inv.id}')" class="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition" title="Catat Pembayaran atau Cicilan">
                                     <i data-lucide="credit-card" class="w-3.5 h-3.5"></i> Bayar
                                 </button>
-                                <button type="button" onclick="sendInvoiceReminder('${inv.id}', 'both')" class="p-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold rounded-xl text-xs flex items-center border border-sky-200 transition" title="Kirim Pengingat Otomatis via Bot WA & Email">
-                                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                                </button>
                             ` : `
-                                <button type="button" onclick="printInvoicePDF('${inv.id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-indigo-200 transition" title="Cetak Kuitansi Resmi">
+                                <button type="button" onclick="printInvoicePDF('${inv.id}')" class="h-8 px-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 transition" title="Cetak Kuitansi Resmi">
                                     <i data-lucide="printer" class="w-3.5 h-3.5"></i> Kuitansi
                                 </button>
                             `}
-                            ${inv.payment_count > 0 ? `
-                                <button type="button" onclick="openInstallmentsModal('${inv.id}')" class="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs flex items-center border border-purple-200 transition" title="Lihat ${inv.payment_count} Riwayat Cicilan">
-                                    <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+
+                            <div class="h-8 inline-flex items-center rounded-xl border border-slate-200/90 bg-slate-50/90 p-0.5 gap-0.5 shadow-xs">
+                                ${inv.status !== 'LUNAS' ? `
+                                    <button type="button" onclick="sendInvoiceReminder('${inv.id}', 'both')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-sky-600 hover:bg-white transition" title="Kirim Pengingat Otomatis via Bot WA & Email">
+                                        <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                ` : ''}
+
+                                ${inv.payment_count > 0 ? `
+                                    <button type="button" onclick="openInstallmentsModal('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-purple-600 hover:text-purple-700 hover:bg-white transition" title="Lihat ${inv.payment_count} Riwayat Cicilan">
+                                        <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                ` : ''}
+
+                                ${inv.payment_proof ? `
+                                    <button type="button" onclick="openProofModal('${inv.id}', '${inv.payment_proof}', '${inv.payment_method}', '${escapeHtml(inv.notes || '')}', ${remaining})" class="w-7 h-7 flex items-center justify-center rounded-lg text-amber-600 hover:text-amber-700 hover:bg-white transition" title="Lihat Bukti Transfer">
+                                        <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                ` : ''}
+
+                                <a href="/tagihan.html?id=${inv.id}${inv.access_token ? `&token=${encodeURIComponent(inv.access_token)}` : ''}" target="_blank" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-white transition" title="Buka Link Tagihan Publik">
+                                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                                </a>
+
+                                <span class="w-px h-3.5 bg-slate-200/80 mx-0.5"></span>
+
+                                <button type="button" onclick="editInvoice('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition" title="Edit Tagihan">
+                                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                                 </button>
-                            ` : ''}
-                            ${inv.payment_proof ? `
-                                <button type="button" onclick="openProofModal('${inv.id}', '${inv.payment_proof}', '${inv.payment_method}', '${inv.notes || ''}', ${remaining})" class="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs flex items-center border border-amber-200 transition" title="Lihat Bukti Transfer">
-                                    <i data-lucide="image" class="w-3.5 h-3.5"></i>
+
+                                <button type="button" onclick="deleteInvoice('${inv.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white transition" title="Hapus Tagihan">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                 </button>
-                            ` : ''}
-                            <a href="/tagihan.html?id=${inv.id}${inv.access_token ? `&token=${encodeURIComponent(inv.access_token)}` : ''}" target="_blank" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-xl text-xs flex items-center border border-slate-200/60 transition" title="Buka Link Tagihan Publik">
-                                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-                            </a>
-                            <button type="button" onclick="editInvoice('${inv.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition" title="Edit Tagihan">
-                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-                            </button>
-                            <button type="button" onclick="deleteInvoice('${inv.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition" title="Hapus Tagihan">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                            </button>
+                            </div>
                         </div>
                     </td>
                 </tr>`;
@@ -2505,32 +2829,179 @@
             lucide.createIcons();
         }
 
+        function populateExpenseYearOptions() {
+            const yearSelect = document.getElementById('filter-expense-year');
+            if (!yearSelect) return;
+            const currentVal = yearSelect.value || activeExpenseYearFilter || 'ALL';
+            const yearsSet = new Set();
+            const currentYear = new Date().getFullYear();
+            yearsSet.add(currentYear);
+
+            expensesData.forEach(e => {
+                if (e.date) {
+                    const y = e.date.slice(0, 4);
+                    if (/^\d{4}$/.test(y)) yearsSet.add(parseInt(y, 10));
+                }
+            });
+
+            const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
+            const currentOptionsKey = sortedYears.join(',');
+            if (yearSelect.dataset.renderedYears !== currentOptionsKey) {
+                yearSelect.dataset.renderedYears = currentOptionsKey;
+                let optionsHtml = '<option value="ALL">Semua Tahun</option>';
+                sortedYears.forEach(y => {
+                    optionsHtml += `<option value="${y}">${y}</option>`;
+                });
+                yearSelect.innerHTML = optionsHtml;
+                yearSelect.value = currentVal;
+            }
+        }
+
+        function matchesExpensePeriod(e, month, year) {
+            if (month === 'ALL' && year === 'ALL') return true;
+            if (!e.date) return false;
+
+            const parts = e.date.split('-');
+            if (parts.length < 2) return false;
+            const expYear = parts[0];
+            const expMonth = parts[1];
+
+            if (year !== 'ALL' && expYear !== String(year)) {
+                return false;
+            }
+
+            if (month !== 'ALL') {
+                const indonesianMonths = ['januari', 'februari', 'maret', 'april', 'mei', 'juni', 'juli', 'agustus', 'september', 'oktober', 'november', 'desember'];
+                let targetMonthStr = String(month);
+                const idx = indonesianMonths.indexOf(targetMonthStr.toLowerCase());
+                if (idx !== -1) {
+                    targetMonthStr = String(idx + 1).padStart(2, '0');
+                } else {
+                    targetMonthStr = targetMonthStr.padStart(2, '0');
+                }
+                if (expMonth !== targetMonthStr) return false;
+            }
+
+            return true;
+        }
+
+        function handleExpensePeriodFilter() {
+            const monthEl = document.getElementById('filter-expense-month');
+            const yearEl = document.getElementById('filter-expense-year');
+            activeExpenseMonthFilter = monthEl ? monthEl.value : 'ALL';
+            activeExpenseYearFilter = yearEl ? yearEl.value : 'ALL';
+            updateExpenseFilterBadge();
+            renderExpenses();
+        }
+
+        function setExpensePeriodThisMonth() {
+            const now = new Date();
+            const indonesianMonths = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            const curMonthName = indonesianMonths[now.getMonth()];
+            const curYear = String(now.getFullYear());
+
+            const monthEl = document.getElementById('filter-expense-month');
+            const yearEl = document.getElementById('filter-expense-year');
+            if (monthEl) monthEl.value = curMonthName;
+            if (yearEl) yearEl.value = curYear;
+
+            activeExpenseMonthFilter = curMonthName;
+            activeExpenseYearFilter = curYear;
+            updateExpenseFilterBadge();
+            renderExpenses();
+        }
+
+        function updateExpenseFilterBadge() {
+            const badge = document.getElementById('tracefund-search-badge');
+            const badgeText = document.getElementById('tracefund-search-badge-text');
+            const resetBtn = document.getElementById('btn-reset-expense-filter');
+
+            const isPeriodFiltered = activeExpenseMonthFilter !== 'ALL' || activeExpenseYearFilter !== 'ALL';
+            if (resetBtn) {
+                if (isPeriodFiltered || expenseSearchQuery) {
+                    resetBtn.classList.remove('hidden');
+                } else {
+                    resetBtn.classList.add('hidden');
+                }
+            }
+
+            if (!badge || !badgeText) return;
+            if (isPeriodFiltered || expenseSearchQuery) {
+                let parts = [];
+                if (activeExpenseMonthFilter !== 'ALL' && activeExpenseYearFilter !== 'ALL') {
+                    parts.push(`Periode: ${activeExpenseMonthFilter} ${activeExpenseYearFilter}`);
+                } else if (activeExpenseMonthFilter !== 'ALL') {
+                    parts.push(`Bulan: ${activeExpenseMonthFilter}`);
+                } else if (activeExpenseYearFilter !== 'ALL') {
+                    parts.push(`Tahun: ${activeExpenseYearFilter}`);
+                }
+                if (expenseSearchQuery) {
+                    parts.push(`Kata kunci: "${expenseSearchQuery}"`);
+                }
+                badgeText.innerText = `Menampilkan pengeluaran (${parts.join(' • ')})`;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
         function renderExpenses(customList) {
-            const list = Array.isArray(customList) ? customList : expensesData;
+            populateExpenseYearOptions();
+            updateExpenseFilterBadge();
             const tbody = document.getElementById('expenses-table-body');
             if (!tbody) return;
-            if (list.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400 italic">Belum ada catatan pengeluaran.</td></tr>`;
+
+            const sourceList = Array.isArray(customList) ? customList : expensesData;
+            const filtered = sourceList.filter(e => {
+                const matchPeriod = matchesExpensePeriod(e, activeExpenseMonthFilter, activeExpenseYearFilter);
+                if (!matchPeriod) return false;
+
+                if (!expenseSearchQuery) return true;
+                const q = expenseSearchQuery;
+                const dateStr = (e.date || '').toLowerCase();
+                const catStr = (e.category || '').toLowerCase();
+                const noteStr = (e.note || '').toLowerCase();
+                const descStr = (e.description || '').toLowerCase();
+                return dateStr.includes(q) || catStr.includes(q) || noteStr.includes(q) || descStr.includes(q);
+            });
+
+            // Update total & counter
+            const totalAmount = filtered.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+            const totalEl = document.getElementById('expense-total-display');
+            const countEl = document.getElementById('expense-count-display');
+            if (totalEl) totalEl.innerText = formatRupiah(totalAmount);
+            if (countEl) countEl.innerText = filtered.length;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400 italic">Tidak ada catatan pengeluaran yang cocok dengan filter atau pencarian.</td></tr>`;
+                lucide.createIcons();
                 return;
             }
-            tbody.innerHTML = list.map(e => {
+
+            tbody.innerHTML = filtered.map(e => {
                 const rawDesc = e.description && e.category
                     ? e.description.replace(new RegExp('^' + e.category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':\\s*', 'i'), '')
                     : (e.description || '');
                 const displayNote = (e.note && String(e.note).trim()) ? e.note : (rawDesc || '-');
                 return `
-                <tr class="hover:bg-slate-50">
-                    <td class="py-3 px-4 font-medium text-slate-700">${e.date}</td>
-                    <td class="py-3 px-4 font-bold text-slate-900">${e.category}</td>
-                    <td class="py-3 px-4 text-slate-500">${displayNote}</td>
-                    <td class="py-3 px-4 font-bold text-rose-600">${formatRupiah(e.amount)}</td>
-                    <td class="py-3 px-4 text-center whitespace-nowrap">
-                        <button onclick="editExpense('${e.id}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded mr-1" title="Edit Pengeluaran">
-                            <i data-lucide="edit-3" class="w-4 h-4"></i>
-                        </button>
-                        <button onclick="deleteExpense('${e.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded" title="Hapus Pengeluaran">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
+                <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                    <td class="py-3 px-4 font-medium text-slate-700 whitespace-nowrap">${e.date}</td>
+                    <td class="py-3 px-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            ${e.category}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-slate-600 max-w-xs truncate">${escapeHtml(displayNote)}</td>
+                    <td class="py-3 px-4 font-bold text-rose-600 whitespace-nowrap">${formatRupiah(e.amount)}</td>
+                    <td class="py-3 px-4 align-middle text-right whitespace-nowrap pr-5">
+                        <div class="inline-flex items-center rounded-xl border border-slate-200/90 bg-slate-50/90 p-0.5 gap-0.5 shadow-xs">
+                            <button type="button" onclick="editExpense('${e.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition" title="Edit Pengeluaran">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button type="button" onclick="deleteExpense('${e.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white transition" title="Hapus Pengeluaran">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 `;
@@ -2900,9 +3371,19 @@
             document.getElementById('form-invoice-id').value = '';
             document.getElementById('form-invoice-amount-preview').innerText = 'Rp 0';
             document.getElementById('modal-invoice-title').innerText = 'Buat Tagihan Khusus';
+            const installBox = document.getElementById('form-invoice-installment-info');
+            if (installBox) installBox.classList.add('hidden');
             document.getElementById('modal-invoice').classList.remove('hidden');
+            lucide.createIcons();
         }
         function closeInvoiceModal() { document.getElementById('modal-invoice').classList.add('hidden'); }
+
+        function handleOpenInstallmentsFromInvoiceModal() {
+            const invId = document.getElementById('form-invoice-id').value;
+            if (!invId) return;
+            closeInvoiceModal();
+            openInstallmentsModal(invId);
+        }
 
         function editInvoice(id) {
             const inv = invoicesData.find(i => i.id === id);
@@ -2918,7 +3399,22 @@
             document.getElementById('form-invoice-status').value = inv.status || 'BELUM_BAYAR';
             document.getElementById('form-invoice-notes').value = inv.notes || '';
             document.getElementById('modal-invoice-title').innerText = `Edit Tagihan (${inv.id})`;
+
+            const installBox = document.getElementById('form-invoice-installment-info');
+            const installText = document.getElementById('form-invoice-installment-text');
+            const paid = inv.paid_amount || 0;
+            const count = inv.payment_count || 0;
+            if (installBox && installText) {
+                if (paid > 0 || count > 0) {
+                    installBox.classList.remove('hidden');
+                    installText.innerHTML = `Sudah tercatat cicilan masuk senilai <strong>${formatRupiah(paid)}</strong> (${count}x pembayaran). Status tagihan disinkronkan otomatis oleh sistem. Klik tombol di atas untuk melihat, mengedit, atau menghapus riwayat cicilan.`;
+                } else {
+                    installBox.classList.add('hidden');
+                }
+            }
+
             document.getElementById('modal-invoice').classList.remove('hidden');
+            lucide.createIcons();
         }
 
         async function handleSaveInvoice(e) {
@@ -3217,11 +3713,13 @@
         }
 
         let activeInvoiceForInstallments = null;
+        let currentModalPayments = [];
 
         async function openInstallmentsModal(invoiceId) {
             const inv = invoicesData.find(i => i.id === invoiceId);
             if (!inv) return;
             activeInvoiceForInstallments = inv;
+            currentModalPayments = [];
 
             document.getElementById('modal-installments-title').innerText = `Riwayat Cicilan Unit ${inv.room_number}`;
             document.getElementById('modal-installments-sub').innerText = `Invoice: ${inv.id} • Periode: ${inv.month_year}`;
@@ -3230,24 +3728,30 @@
             tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-400 italic">Memuat riwayat cicilan...</td></tr>`;
             document.getElementById('modal-installments').classList.remove('hidden');
 
+            const btnDelAll = document.getElementById('btn-delete-all-installments');
+            if (btnDelAll) btnDelAll.classList.add('hidden');
+
             try {
                 const res = await fetch(`/api/invoices/${invoiceId}/payments`, { headers: authHeaders() });
                 const data = await res.json();
                 const payments = Array.isArray(data) ? data : (data.payments || []);
+                currentModalPayments = payments;
 
                 if (!Array.isArray(payments) || payments.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400 italic">Belum ada catatan cicilan untuk invoice ini.</td></tr>`;
+                    if (btnDelAll) btnDelAll.classList.add('hidden');
                 } else {
+                    if (btnDelAll) btnDelAll.classList.remove('hidden');
                     tbody.innerHTML = payments.map(p => `
                         <tr class="hover:bg-slate-50">
                             <td class="py-2.5 px-3 font-medium text-slate-700">${p.payment_date || '-'}</td>
                             <td class="py-2.5 px-3">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">${p.payment_method || 'TRANSFER'}</span>
                             </td>
-                            <td class="py-2.5 px-3 text-slate-600 max-w-[160px] truncate">${p.notes || '-'}</td>
+                            <td class="py-2.5 px-3 text-slate-600 max-w-[160px] truncate">${escapeHtml(p.notes || '-')}</td>
                             <td class="py-2.5 px-3 text-right font-black text-emerald-600">${formatRupiah(p.amount)}</td>
                             <td class="py-2.5 px-3 text-center whitespace-nowrap">
-                                <button type="button" onclick="openEditPaymentModal('${inv.id}', '${p.id}', ${p.amount}, '${p.payment_method || 'TRANSFER'}', '${p.payment_date || ''}', '${escapeHtml(p.notes || '')}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded transition mr-1" title="Edit Entri Cicilan">
+                                <button type="button" onclick="openEditPaymentModal('${p.id}')" class="p-1 text-slate-400 hover:text-indigo-600 rounded transition mr-1" title="Edit Entri Cicilan">
                                     <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                                 </button>
                                 <button type="button" onclick="deletePaymentEntry('${inv.id}', '${p.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded transition" title="Hapus Entri Pembayaran">
@@ -3291,15 +3795,50 @@
             }
         }
 
-        function openEditPaymentModal(invId, payId, amount, method, date, notes) {
-            document.getElementById('edit-payment-id').value = payId;
-            document.getElementById('edit-payment-inv-id').value = invId;
-            document.getElementById('edit-payment-amount').value = (amount || 0).toLocaleString('id-ID');
-            document.getElementById('edit-payment-amount-preview').innerText = formatRupiah(amount || 0);
-            document.getElementById('edit-payment-method').value = method || 'TRANSFER';
-            document.getElementById('edit-payment-date').value = date || '';
-            document.getElementById('edit-payment-notes').value = notes || '';
+        function openEditPaymentModal(arg1, arg2, amount, method, date, notes) {
+            if (arg2 !== undefined) {
+                document.getElementById('edit-payment-id').value = arg2;
+                document.getElementById('edit-payment-inv-id').value = arg1;
+                document.getElementById('edit-payment-amount').value = (amount || 0).toLocaleString('id-ID');
+                document.getElementById('edit-payment-amount-preview').innerText = formatRupiah(amount || 0);
+                document.getElementById('edit-payment-method').value = method || 'TRANSFER';
+                document.getElementById('edit-payment-date').value = date || '';
+                document.getElementById('edit-payment-notes').value = notes || '';
+            } else {
+                const payId = arg1;
+                const p = (currentModalPayments || []).find(item => item.id === payId);
+                if (!p) return;
+                document.getElementById('edit-payment-id').value = p.id;
+                document.getElementById('edit-payment-inv-id').value = activeInvoiceForInstallments ? activeInvoiceForInstallments.id : (p.invoice_id || '');
+                document.getElementById('edit-payment-amount').value = (p.amount || 0).toLocaleString('id-ID');
+                document.getElementById('edit-payment-amount-preview').innerText = formatRupiah(p.amount || 0);
+                document.getElementById('edit-payment-method').value = p.payment_method || 'TRANSFER';
+                document.getElementById('edit-payment-date').value = p.payment_date || '';
+                document.getElementById('edit-payment-notes').value = p.notes || '';
+            }
             document.getElementById('modal-edit-payment').classList.remove('hidden');
+        }
+
+        async function handleDeleteAllInstallments() {
+            if (!activeInvoiceForInstallments) return;
+            const invId = activeInvoiceForInstallments.id;
+            if (!confirm(`Hapus seluruh riwayat cicilan untuk tagihan ${invId}? Status tagihan akan otomatis kembali menjadi BELUM_BAYAR.`)) return;
+            try {
+                const res = await fetch(`/api/invoices/${invId}/payments`, {
+                    method: 'DELETE',
+                    headers: authHeaders()
+                });
+                const d = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    showToast(d.message || 'Semua cicilan berhasil dihapus');
+                    closeInstallmentsModal();
+                    await loadAllData();
+                } else {
+                    showToast(d.message || 'Gagal menghapus cicilan', 'danger');
+                }
+            } catch (err) {
+                showToast('Kesalahan jaringan: ' + err.message, 'danger');
+            }
         }
 
         function closeEditPaymentModal() {
@@ -3685,42 +4224,27 @@
         }
 
         // TraceFund Keyword Search (/total)
-        async function handleTraceFundSearch(keyword) {
+        function handleTraceFundSearch(keyword) {
             clearTimeout(traceFundSearchTimer);
             const kw = (keyword || '').trim();
-            const badgeBox = document.getElementById('tracefund-search-badge');
-            const badgeText = document.getElementById('tracefund-search-badge-text');
-
-            if (!kw) {
-                if (badgeBox) badgeBox.classList.add('hidden');
-                renderExpenses(expensesData);
-                return;
-            }
-
-            traceFundSearchTimer = setTimeout(async () => {
-                try {
-                    const res = await fetch(`/api/tracefund/total?keyword=${encodeURIComponent(kw)}`, { headers: authHeaders() });
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (badgeBox && badgeText) {
-                            badgeBox.classList.remove('hidden');
-                            badgeText.innerText = `Ditemukan ${data.count} transaksi untuk "${data.keyword}": Total ${formatRupiah(data.total_amount)}`;
-                        }
-                        const filteredExpenses = (data.transactions || []).filter(t => t.type === 'keluar').reverse();
-                        renderExpenses(filteredExpenses);
-                    }
-                } catch (err) {
-                    console.error('Gagal mencari transaksi:', err);
-                }
-            }, 250);
+            expenseSearchQuery = kw.toLowerCase();
+            updateExpenseFilterBadge();
+            renderExpenses();
         }
 
         function resetTraceFundSearch() {
             const input = document.getElementById('tracefund-search-input');
+            const monthEl = document.getElementById('filter-expense-month');
+            const yearEl = document.getElementById('filter-expense-year');
             if (input) input.value = '';
-            const badgeBox = document.getElementById('tracefund-search-badge');
-            if (badgeBox) badgeBox.classList.add('hidden');
-            renderExpenses(expensesData);
+            if (monthEl) monthEl.value = 'ALL';
+            if (yearEl) yearEl.value = 'ALL';
+
+            expenseSearchQuery = '';
+            activeExpenseMonthFilter = 'ALL';
+            activeExpenseYearFilter = 'ALL';
+            updateExpenseFilterBadge();
+            renderExpenses();
         }
 
         // Ekspor CSV Transaksi Saldo Berjalan

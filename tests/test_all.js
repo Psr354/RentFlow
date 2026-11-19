@@ -420,6 +420,20 @@ async function testTraceFundCommands() {
                 const checkPayAfterDel = appDb.prepare('SELECT * FROM invoice_payments WHERE id = ?').get(paymentId);
                 assert.strictEqual(checkPayAfterDel, undefined);
 
+                // Test DELETE All Payments for an invoice
+                await makeRequest(port, 'POST', `/api/invoices/${testInvId}/pay`, { amount: 500000, notes: 'Cicilan A' });
+                await makeRequest(port, 'POST', `/api/invoices/${testInvId}/pay`, { amount: 500000, notes: 'Cicilan B' });
+                const countBeforeDelAll = appDb.prepare('SELECT COUNT(*) as c FROM invoice_payments WHERE invoice_id = ?').get(testInvId).c;
+                assert.strictEqual(countBeforeDelAll, 2);
+
+                const delAllPay = await makeRequest(port, 'DELETE', `/api/invoices/${testInvId}/payments`);
+                assert.strictEqual(delAllPay.statusCode, 200);
+                assert.strictEqual(delAllPay.body.success, true);
+                const countAfterDelAll = appDb.prepare('SELECT COUNT(*) as c FROM invoice_payments WHERE invoice_id = ?').get(testInvId).c;
+                assert.strictEqual(countAfterDelAll, 0);
+                const checkInvAfterDelAll = appDb.prepare('SELECT * FROM invoices WHERE id = ?').get(testInvId);
+                assert.strictEqual(checkInvAfterDelAll.status, 'BELUM_BAYAR');
+
                 // DELETE Invoice
                 const delInv = await makeRequest(port, 'DELETE', `/api/invoices/${testInvId}`);
                 assert.strictEqual(delInv.statusCode, 200);

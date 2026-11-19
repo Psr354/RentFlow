@@ -676,6 +676,13 @@ async function handleRequest(req, res) {
         return send(res, 200, { success: true, message: 'Catatan pembayaran cicilan berhasil dihapus', ...resStatus });
     }
 
+    if (req.method === 'DELETE' && pathname.endsWith('/payments') && pathname.startsWith('/api/invoices/')) {
+        const invId = decodeURIComponent(pathname.replace('/api/invoices/', '').replace('/payments', ''));
+        db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(invId);
+        const resStatus = recalculateInvoiceStatus(invId, true);
+        return send(res, 200, { success: true, message: 'Semua catatan pembayaran cicilan berhasil dihapus', ...resStatus });
+    }
+
     if (req.method === 'POST' && pathname === '/api/invoices/generate-monthly') {
         readBody(req, res, (body) => {
             try {
