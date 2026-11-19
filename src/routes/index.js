@@ -244,7 +244,7 @@ async function handleRequest(req, res) {
                             `Sisa Sebelum Bayar: Rp ${Number(invoice.remaining_amount).toLocaleString('id-ID')}\n` +
                             `Metode: *${payment_method || 'Transfer'}*\n` +
                             `Catatan: ${notes || '-'}\n\n` +
-                            `Buka dashboard untuk verifikasi: ${(settings.base_url || 'http://localhost:5005')}`;
+                            `Buka dashboard untuk verifikasi: ${(settings.base_url || 'https://sekeluarga.web.id')}`;
 
                         sendUnifiedWhatsApp(settings.owner_phone, alertOwnerText).catch(e => {
                             console.error('Gagal mengirim notif ke pemilik:', e.message);
@@ -318,7 +318,7 @@ async function handleRequest(req, res) {
                             `Kategori: *${tCat}*\n` +
                             `Keterangan Keluhan:\n"${description.trim()}"\n\n` +
                             (photoUrl ? `(Foto bukti kerusakan terlampir)\n` : '') +
-                            `Buka dashboard: ${(settings.base_url || 'http://localhost:5005')}`;
+                            `Buka dashboard: ${(settings.base_url || 'https://sekeluarga.web.id')}`;
 
                         sendUnifiedWhatsApp(settings.owner_phone, alertOwnerText).catch(e => {
                             console.error('Gagal mengirim notif keluhan ke pemilik:', e.message);
@@ -761,7 +761,7 @@ async function handleRequest(req, res) {
                 if (!inv) return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
 
                 const settings = getSettings();
-                const baseUrl = settings.base_url || 'http://localhost:5005';
+                const baseUrl = settings.base_url || 'https://sekeluarga.web.id';
                 const tokenParam = inv.access_token ? `&token=${encodeURIComponent(inv.access_token)}` : '';
                 const payUrl = `${baseUrl}/tagihan.html?id=${encodeURIComponent(inv.id)}${tokenParam}`;
                 const remaining = Number(inv.remaining_amount !== undefined ? inv.remaining_amount : inv.amount);

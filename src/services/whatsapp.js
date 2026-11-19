@@ -794,7 +794,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
                     `Keluhan: "${c.description}"\n` +
                     `Status: *${c.status}*\n\n`;
             });
-            replyText += `Buka dashboard untuk kelola: ${(settings.base_url || 'http://localhost:5005')}`;
+            replyText += `Buka dashboard untuk kelola: ${(settings.base_url || 'https://sekeluarga.web.id')}`;
         }
 
         await safeSend(replyText);
@@ -957,7 +957,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
     const eksporMatch = trimmed.match(/^#?(?:ekspor|csv)(?:\s+(.+))?$/i);
     if (eksporMatch) {
         const rawArg = eksporMatch[1] ? eksporMatch[1].trim() : '';
-        let exportUrl = `${settings.base_url || 'http://localhost:5005'}/api/tracefund/export-csv`;
+        let exportUrl = `${settings.base_url || 'https://sekeluarga.web.id'}/api/tracefund/export-csv`;
         let periodLabel = 'Seluruh Periode';
 
         if (rawArg) {

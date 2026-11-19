@@ -164,7 +164,7 @@ const defaultSettings = {
     reminder_h_plus: '1',
     auto_billing: '1',
     wa_group_id: '',
-    base_url: 'http://localhost:5005'
+    base_url: 'https://sekeluarga.web.id'
 };
 
 for (const [k, v] of Object.entries(defaultSettings)) {

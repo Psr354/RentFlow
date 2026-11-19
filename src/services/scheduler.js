@@ -166,7 +166,7 @@ async function runReminderCheck(forceOverdue = false) {
     }
 
     const settings = getSettings();
-    const baseUrl = settings.base_url || 'http://localhost:5005';
+    const baseUrl = settings.base_url || 'https://sekeluarga.web.id';
 
     const unpaidInvoices = db.prepare(`
         SELECT i.*,
@@ -291,7 +291,7 @@ function buildSystemNoticeEmailHtml(settings) {
     const ownerName = settings.owner_name || 'Pengelola Kontrakan';
     const ownerPhone = settings.owner_phone || '-';
     const ownerAddress = settings.owner_address || '-';
-    const baseUrl = settings.base_url || 'http://localhost:5005';
+    const baseUrl = settings.base_url || 'https://sekeluarga.web.id';
 
     return `
 <!DOCTYPE html>
