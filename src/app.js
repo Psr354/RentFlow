@@ -2,20 +2,32 @@ const http = require('node:http');
 const { handleRequest } = require('./routes/index');
 const { db } = require('./config/database');
 
+function isTrustedOrigin(origin) {
+    if (!origin || typeof origin !== 'string') return false;
+    try {
+        const u = new URL(origin);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+        const host = u.hostname.toLowerCase();
+        return host === 'localhost' || 
+            host === '127.0.0.1' || 
+            host === 'sekeluarga.web.id' ||
+            host.startsWith('192.168.') ||
+            host.startsWith('10.') ||
+            host.startsWith('172.');
+    } catch (_) {
+        return false;
+    }
+}
+
 const server = http.createServer(async (req, res) => {
     const origin = req.headers.origin;
     const reqUrl = req.url || '';
     if (origin) {
         if (reqUrl.startsWith('/api/public/')) {
             res.setHeader('Access-Control-Allow-Origin', '*');
-        } else {
-            const isLocalOrTrusted = origin.includes('localhost') || 
-                origin.includes('127.0.0.1') || 
-                origin.includes('sekeluarga.web.id');
-            if (isLocalOrTrusted) {
-                res.setHeader('Access-Control-Allow-Origin', origin);
-                res.setHeader('Vary', 'Origin');
-            }
+        } else if (isTrustedOrigin(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Vary', 'Origin');
         }
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');

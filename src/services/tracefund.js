@@ -28,7 +28,15 @@ function createDatabaseBackup() {
 }
 
 function getUnifiedTransactions(filters = {}) {
-    const incomeRows = db.prepare(`
+    const month = filters.month || null;
+    const year = (!filters.month && filters.year) ? filters.year : null;
+    const datePrefix = month || year || null;
+    const type = filters.type || null;
+    const category = filters.category ? filters.category.toLowerCase().trim() : null;
+    const keyword = filters.keyword ? filters.keyword.toLowerCase().trim() : null;
+
+    const sql = `
+    WITH unified AS (
         SELECT 
             p.id,
             substr(p.payment_date, 1, 10) as date,
@@ -60,60 +68,62 @@ function getUnifiedTransactions(filters = {}) {
             ('Pemasukan: ' || COALESCE(g.note, g.category)) as description,
             g.category
         FROM general_incomes g
-    `).all();
-
-    const expenseRows = db.prepare(`
+        UNION ALL
         SELECT 
             e.id,
             e.date,
             'keluar' as type,
             e.amount,
             (e.category || ': ' || COALESCE(e.note, '-')) as description,
-            e.category,
-            e.note
+            e.category
         FROM expenses e
-    `).all();
+    ),
+    with_running AS (
+        SELECT 
+            id, date, type, amount, description, category,
+            SUM(CASE WHEN type = 'masuk' THEN amount ELSE -amount END) OVER (ORDER BY date ASC, id ASC) as running_balance
+        FROM unified
+    )
+    SELECT * FROM with_running
+    WHERE (? IS NULL OR date LIKE ? || '%')
+      AND (? IS NULL OR type = ?)
+      AND (? IS NULL OR lower(category) = ?)
+      AND (? IS NULL OR (lower(description) LIKE '%' || ? || '%' OR lower(category) LIKE '%' || ? || '%'))
+    ORDER BY date ASC, id ASC;
+    `;
 
-    const all = [...incomeRows, ...expenseRows].sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return a.id.localeCompare(b.id);
-    });
+    const totalCount = db.prepare(`
+        SELECT count(*) as c FROM (
+            SELECT id FROM invoice_payments 
+            UNION ALL 
+            SELECT id FROM invoices WHERE status = 'LUNAS' AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = invoices.id) 
+            UNION ALL 
+            SELECT id FROM general_incomes 
+            UNION ALL 
+            SELECT id FROM expenses
+        )
+    `).get().c;
 
-    let running = 0;
-    const enriched = all.map(t => {
-        running += (t.type === 'masuk' ? t.amount : -t.amount);
-        return {
-            ...t,
-            running_balance: running
-        };
-    });
+    const currentBalance = db.prepare(`
+        SELECT COALESCE(
+            (SELECT COALESCE(SUM(amount), 0) FROM invoice_payments) +
+            (SELECT COALESCE(SUM(amount), 0) FROM invoices WHERE status = 'LUNAS' AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = invoices.id)) +
+            (SELECT COALESCE(SUM(amount), 0) FROM general_incomes) -
+            (SELECT COALESCE(SUM(amount), 0) FROM expenses),
+        0) as bal
+    `).get().bal;
 
-    let filtered = enriched;
-    if (filters.month) {
-        filtered = filtered.filter(t => t.date.startsWith(filters.month));
-    }
-    if (filters.year) {
-        filtered = filtered.filter(t => t.date.startsWith(filters.year));
-    }
-    if (filters.keyword) {
-        const kw = filters.keyword.toLowerCase().trim();
-        filtered = filtered.filter(t => 
-            t.description.toLowerCase().includes(kw) || 
-            (t.category && t.category.toLowerCase().includes(kw))
-        );
-    }
-    if (filters.category) {
-        const cat = filters.category.toLowerCase().trim();
-        filtered = filtered.filter(t => t.category && t.category.toLowerCase() === cat);
-    }
-    if (filters.type) {
-        filtered = filtered.filter(t => t.type === filters.type);
-    }
+    const transactions = db.prepare(sql).all(
+        datePrefix, datePrefix,
+        type, type,
+        category, category,
+        keyword, keyword, keyword
+    );
 
     return {
-        transactions: filtered,
-        current_balance: running,
-        total_count: enriched.length
+        transactions,
+        current_balance: currentBalance,
+        total_count: totalCount
     };
 }
 

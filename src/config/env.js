@@ -6,8 +6,13 @@ const HOST = process.env.HOST || '0.0.0.0';
 const APP_USER = process.env.APP_USER || 'admin';
 const APP_PASS = process.env.APP_PASS || 'nekyuyun2026';
 
-if (process.env.NODE_ENV === 'production' && APP_PASS === 'nekyuyun2026') {
-    console.warn('[SECURITY WARNING] Server berjalan dalam mode produksi dengan kata sandi bawaan! Segera konfigurasikan APP_PASS pada environment variable.');
+if (process.env.NODE_ENV === 'production' && (!process.env.APP_PASS || process.env.APP_PASS === 'nekyuyun2026')) {
+    if (process.env.ALLOW_DEFAULT_PASS !== '1') {
+        console.error('[FATAL SECURITY ERROR] Server berjalan dalam mode produksi dengan kata sandi bawaan! Segera konfigurasikan APP_PASS yang aman di environment variable.');
+        process.exit(1);
+    } else {
+        console.warn('[SECURITY WARNING] Server berjalan dalam mode produksi dengan kata sandi bawaan karena ALLOW_DEFAULT_PASS=1!');
+    }
 }
 
 const WA_WEBHOOK_SECRET = process.env.WA_WEBHOOK_SECRET || '';

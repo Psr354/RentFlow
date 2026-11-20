@@ -1748,6 +1748,19 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function escapeAttrJs(str) {
+            if (!str) return '';
+            const jsEscaped = String(str)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '\\"')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r')
+                .replace(/</g, '\\x3c')
+                .replace(/>/g, '\\x3e');
+            return escapeHtml(jsEscaped);
+        }
+
         const INDO_MONTHS = [
             'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
             'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'

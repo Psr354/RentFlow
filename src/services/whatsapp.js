@@ -189,7 +189,8 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
     let cleanSender = senderPhone ? String(senderPhone).split('@')[0].split(':')[0].replace(/[^0-9]/g, '') : '';
     if (cleanSender.startsWith('0')) cleanSender = '62' + cleanSender.slice(1);
 
-    const isOwner = authorizedOwners.includes(cleanSender);
+    const isFromMe = Boolean(originalMsg?.key?.fromMe);
+    const isOwner = isFromMe || authorizedOwners.includes(cleanSender);
     let registeredGroupId = settings.wa_group_id || '';
 
     const trimmed = text.trim();

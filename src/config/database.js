@@ -9,11 +9,13 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(WA_SESSION_DIR)) fs.mkdirSync(WA_SESSION_DIR, { recursive: true });
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
 
-// Inisialisasi Database SQLite dengan WAL & Foreign Keys
+// Inisialisasi Database SQLite dengan WAL, Foreign Keys & Busy Timeout
 const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA synchronous = NORMAL;');
 db.exec('PRAGMA foreign_keys = ON;');
+db.exec('PRAGMA busy_timeout = 5000;');
+db.exec('PRAGMA cache_size = -64000;');
 
 // Skema Basis Data Terpadu
 db.exec(`

@@ -665,6 +665,43 @@ async function testTraceFundCommands() {
                 assert.strictEqual(resLoginOk.statusCode, 200, 'Kredensial benar harus berhasil masuk dengan status 200');
                 assert(typeof resLoginOk.body.token === 'string', 'Login harus mengembalikan token otentikasi');
 
+                // 11.18 Pengujian Strict CORS Origin Whitelisting
+                const resCorsAttacker = await makeRequest(port, 'GET', '/api/rooms', null, {
+                    'Origin': 'https://sekeluarga.web.id.attacker.com'
+                });
+                assert.strictEqual(resCorsAttacker.headers['access-control-allow-origin'], undefined, 'Origin penyerang berbasis subdomain/substring HARUS ditolak');
+
+                const resCorsValid = await makeRequest(port, 'GET', '/api/rooms', null, {
+                    'Origin': 'https://sekeluarga.web.id'
+                });
+                assert.strictEqual(resCorsValid.headers['access-control-allow-origin'], 'https://sekeluarga.web.id', 'Origin terpercaya resmi HARUS diizinkan');
+
+                // 11.19 Pengujian Sanitasi Catatan Pembayaran pada Public Invoice API
+                const privRoomId = 'room-priv-test';
+                const testInvTokenId = 'test-inv-privacy';
+                appDb.prepare("DELETE FROM invoices WHERE id = ?").run(testInvTokenId);
+                appDb.prepare("INSERT OR REPLACE INTO rooms (id, number, status, tenant_name) VALUES (?, '99.PR', 'TERISI', 'Tester Privacy')").run(privRoomId);
+                await makeRequest(port, 'POST', '/api/invoices', {
+                    id: testInvTokenId,
+                    room_id: privRoomId,
+                    month_year: 'Januari 2027',
+                    amount: 1000000,
+                    due_date: '2027-01-05',
+                    access_token: 'secret_token_123'
+                });
+                await makeRequest(port, 'POST', `/api/invoices/${testInvTokenId}/pay`, {
+                    amount: 500000,
+                    notes: 'Catatan rahasia nomor rekening 123456789'
+                });
+
+                const resPublicNoToken = await makeRequest(port, 'GET', `/api/public/invoice/${testInvTokenId}`, null, {});
+                assert.strictEqual(resPublicNoToken.statusCode, 200);
+                assert.strictEqual(resPublicNoToken.body.payments[0].notes, null, 'Catatan pembayaran HARUS disensor jika diakses tanpa token akses');
+
+                const resPublicWithToken = await makeRequest(port, 'GET', `/api/public/invoice/${testInvTokenId}?token=secret_token_123`, null, {});
+                assert.strictEqual(resPublicWithToken.statusCode, 200);
+                assert.strictEqual(resPublicWithToken.body.payments[0].notes, 'Catatan rahasia nomor rekening 123456789 (FIFO: Januari 2027)', 'Catatan pembayaran ditampilkan jika token akses sah');
+
                 appServer.close(resolve);
             } catch (err) {
                 appServer.close(() => reject(err));

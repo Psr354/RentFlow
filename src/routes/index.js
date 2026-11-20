@@ -219,6 +219,14 @@ async function handleRequest(req, res) {
 
             const payments = db.prepare('SELECT id, invoice_id, amount, payment_method, payment_date, notes, created_at FROM invoice_payments WHERE invoice_id = ? ORDER BY payment_date ASC, created_at ASC').all(invoiceId);
 
+            // Lindungi privasi rincian catatan cicilan jika diakses tanpa token akses resmi
+            if (!isAuthorized && !hasValidToken) {
+                for (const p of payments) {
+                    p.notes = null;
+                    p.payment_proof = null;
+                }
+            }
+
             const rawSettings = getSettings();
             const publicSettings = {
                 app_name: rawSettings.app_name || 'Kontrakan Nenek Yuyun',
@@ -513,7 +521,9 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const r = JSON.parse(body || '{}');
-                    const id = r.id || `unit-${crypto.randomBytes(4).toString('hex')}`;
+                    const id = (r.id && /^[a-zA-Z0-9._-]+$/.test(String(r.id).trim()))
+                        ? String(r.id).trim()
+                        : `unit-${crypto.randomBytes(4).toString('hex')}`;
                     const stmt = db.prepare(`
                         INSERT INTO rooms (id, number, type, price, status, tenant_name, tenant_phone, tenant_email, due_day, entry_date, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -638,7 +648,9 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const inv = JSON.parse(body || '{}');
-                    const id = inv.id || `INV-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+                    const id = (inv.id && /^[a-zA-Z0-9._-]+$/.test(String(inv.id).trim()))
+                        ? String(inv.id).trim()
+                        : `INV-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
                     const token = inv.access_token || crypto.randomBytes(12).toString('hex');
                     const stmt = db.prepare(`
                         INSERT INTO invoices (id, room_id, month_year, amount, due_date, status, payment_method, notes, access_token, created_at)
@@ -720,16 +732,30 @@ async function handleRequest(req, res) {
         const parts = pathname.replace('/api/invoices/', '').split('/payments/');
         const invId = decodeURIComponent(parts[0]);
         const payId = decodeURIComponent(parts[1]);
-        db.prepare('DELETE FROM invoice_payments WHERE id = ? AND invoice_id = ?').run(payId, invId);
-        const resStatus = recalculateInvoiceStatus(invId);
-        return send(res, 200, { success: true, message: 'Catatan pembayaran cicilan berhasil dihapus', ...resStatus });
+        db.exec('BEGIN IMMEDIATE;');
+        try {
+            db.prepare('DELETE FROM invoice_payments WHERE id = ? AND invoice_id = ?').run(payId, invId);
+            const resStatus = recalculateInvoiceStatus(invId);
+            db.exec('COMMIT;');
+            return send(res, 200, { success: true, message: 'Catatan pembayaran cicilan berhasil dihapus', ...resStatus });
+        } catch (err) {
+            db.exec('ROLLBACK;');
+            return send(res, 500, { success: false, message: 'Gagal menghapus catatan cicilan: ' + err.message });
+        }
     }
 
     if (req.method === 'DELETE' && pathname.endsWith('/payments') && pathname.startsWith('/api/invoices/')) {
         const invId = decodeURIComponent(pathname.replace('/api/invoices/', '').replace('/payments', ''));
-        db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(invId);
-        const resStatus = recalculateInvoiceStatus(invId, true);
-        return send(res, 200, { success: true, message: 'Semua catatan pembayaran cicilan berhasil dihapus', ...resStatus });
+        db.exec('BEGIN IMMEDIATE;');
+        try {
+            db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(invId);
+            const resStatus = recalculateInvoiceStatus(invId, true);
+            db.exec('COMMIT;');
+            return send(res, 200, { success: true, message: 'Semua catatan pembayaran cicilan berhasil dihapus', ...resStatus });
+        } catch (err) {
+            db.exec('ROLLBACK;');
+            return send(res, 500, { success: false, message: 'Gagal menghapus semua cicilan: ' + err.message });
+        }
     }
 
     if (req.method === 'POST' && pathname === '/api/invoices/generate-monthly') {
@@ -939,7 +965,9 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const exp = JSON.parse(body || '{}');
-                    const id = exp.id || `EXP-${Date.now()}`;
+                    const id = (exp.id && /^[a-zA-Z0-9._-]+$/.test(String(exp.id).trim()))
+                        ? String(exp.id).trim()
+                        : `EXP-${Date.now()}`;
                     const stmt = db.prepare(`
                         INSERT INTO expenses (id, date, category, amount, note, created_at)
                         VALUES (?, ?, ?, ?, ?, ?)
@@ -1019,7 +1047,9 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const data = JSON.parse(body || '{}');
-                    const id = data.id || `CMP-${Date.now()}`;
+                    const id = (data.id && /^[a-zA-Z0-9._-]+$/.test(String(data.id).trim()))
+                        ? String(data.id).trim()
+                        : `CMP-${Date.now()}`;
                     const room_id = data.room_id;
                     const tenant_name = data.tenant_name || '';
                     const tenant_phone = data.tenant_phone || '';
@@ -1341,7 +1371,9 @@ async function handleRequest(req, res) {
         if (isNaN(amount) || amount <= 0) {
             return send(res, 400, { success: false, message: 'Nominal pemasukan harus lebih besar dari 0.' });
         }
-        const id = body.id || `INC-${Date.now()}`;
+        const id = (body.id && /^[a-zA-Z0-9._-]+$/.test(String(body.id).trim()))
+            ? String(body.id).trim()
+            : `INC-${Date.now()}`;
         const date = body.date || getTodayWIB();
         const category = body.category || 'Pemasukan';
         const note = body.note || '';
