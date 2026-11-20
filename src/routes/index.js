@@ -124,6 +124,34 @@ async function handleRequest(req, res) {
             res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
             return res.end('Akses berkas tidak diizinkan.');
         }
+
+        // Kontrol akses berkas bukti pembayaran sensitif (proof_*)
+        if (filename.startsWith('proof_')) {
+            const isAdmin = isAuthed(req, 'admin');
+            let isAuthorized = isAdmin;
+            if (!isAuthorized) {
+                // Format: proof_<invoiceId>_<timestamp>_<safeId>.<ext>
+                const parts = filename.split('_');
+                if (parts.length >= 3) {
+                    const invoiceId = parts[1];
+                    const token = query.token || '';
+                    if (token && invoiceId) {
+                        try {
+                            const inv = db.prepare('SELECT access_token FROM invoices WHERE id = ?').get(invoiceId);
+                            if (inv && inv.access_token && inv.access_token === token) {
+                                isAuthorized = true;
+                            }
+                        } catch (_) {}
+                    }
+                }
+            }
+
+            if (!isAuthorized) {
+                res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                return res.end(JSON.stringify({ success: false, message: 'Akses berkas bukti pembayaran memerlukan otorisasi.' }));
+            }
+        }
+
         res.setHeader('X-Content-Type-Options', 'nosniff');
         return serveStaticFile(res, targetPath, mime);
     }

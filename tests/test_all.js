@@ -657,13 +657,14 @@ async function testTraceFundCommands() {
                 }, { 'Content-Type': 'application/json' });
                 assert.strictEqual(resLoginWrong.statusCode, 401, 'Kata sandi salah harus ditolak dengan status 401');
 
-                const { APP_USER, APP_PASS } = require('../src/config/env.js');
+                const { APP_USER, APP_PASS, UPLOAD_DIR, BACKUP_DIR } = require('../src/config/env.js');
                 const resLoginOk = await makeRequest(port, 'POST', '/api/login', {
                     username: APP_USER,
                     password: APP_PASS
                 }, { 'Content-Type': 'application/json' });
                 assert.strictEqual(resLoginOk.statusCode, 200, 'Kredensial benar harus berhasil masuk dengan status 200');
                 assert(typeof resLoginOk.body.token === 'string', 'Login harus mengembalikan token otentikasi');
+                const adminToken = resLoginOk.body.token;
 
                 // 11.18 Pengujian Strict CORS Origin Whitelisting
                 const resCorsAttacker = await makeRequest(port, 'GET', '/api/rooms', null, {
@@ -701,6 +702,44 @@ async function testTraceFundCommands() {
                 const resPublicWithToken = await makeRequest(port, 'GET', `/api/public/invoice/${testInvTokenId}?token=secret_token_123`, null, {});
                 assert.strictEqual(resPublicWithToken.statusCode, 200);
                 assert.strictEqual(resPublicWithToken.body.payments[0].notes, 'Catatan rahasia nomor rekening 123456789 (FIFO: Januari 2027)', 'Catatan pembayaran ditampilkan jika token akses sah');
+
+                // 11.20 Pengujian Security Headers (CSP & Permissions-Policy)
+                const resHeaders = await makeRequest(port, 'GET', '/health', null, {});
+                assert(resHeaders.headers['content-security-policy'], 'Header Content-Security-Policy HARUS disematkan');
+                assert.strictEqual(resHeaders.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()', 'Header Permissions-Policy HARUS disematkan');
+
+                // 11.21 Pengujian Kontrol Akses Berkas Bukti Pembayaran (/uploads/proof_*)
+                const dummyProofFile = `proof_${testInvTokenId}_${Date.now()}_abc123.jpg`;
+                const dummyProofPath = path.join(UPLOAD_DIR, dummyProofFile);
+                fs.writeFileSync(dummyProofPath, Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]));
+
+                const resProofNoAuth = await makeRequest(port, 'GET', `/uploads/${dummyProofFile}`, null, {});
+                assert.strictEqual(resProofNoAuth.statusCode, 403, 'Akses berkas bukti tanpa otorisasi HARUS ditolak (403)');
+
+                const resProofTenantToken = await makeRequest(port, 'GET', `/uploads/${dummyProofFile}?token=secret_token_123`, null, {});
+                assert.strictEqual(resProofTenantToken.statusCode, 200, 'Akses berkas bukti dengan token invoice yang sah HARUS diizinkan (200)');
+
+                const resProofAdminAuth = await makeRequest(port, 'GET', `/uploads/${dummyProofFile}`, null, {
+                    'Authorization': `Bearer ${adminToken}`
+                });
+                assert.strictEqual(resProofAdminAuth.statusCode, 200, 'Akses berkas bukti oleh admin HARUS diizinkan (200)');
+
+                try { fs.unlinkSync(dummyProofPath); } catch (_) {}
+
+                // 11.22 Penolakan Token Admin via Query Param pada Ekspor CSV
+                const resCsvAdminQuery = await makeRequest(port, 'GET', `/api/tracefund/export-csv?token=${adminToken}`, null, {});
+                assert.strictEqual(resCsvAdminQuery.statusCode, 401, 'Token admin melalui query string HARUS ditolak (401) untuk mencegah kebocoran log');
+
+                const resCsvAdminBearer = await makeRequest(port, 'GET', '/api/tracefund/export-csv', null, {
+                    'Authorization': `Bearer ${adminToken}`
+                });
+                assert.strictEqual(resCsvAdminBearer.statusCode, 200, 'Ekspor CSV dengan Bearer token admin HARUS diizinkan (200)');
+
+                // 11.23 Pengujian Otomatisasi Pencadangan Database TraceFund
+                const { createDatabaseBackup } = require('../src/services/tracefund.js');
+                createDatabaseBackup();
+                const backupFiles = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('kontrakan-') && f.endsWith('.db'));
+                assert(backupFiles.length > 0, 'Fungsi createDatabaseBackup HARUS menghasilkan berkas backup .db di BACKUP_DIR');
 
                 appServer.close(resolve);
             } catch (err) {

@@ -101,6 +101,7 @@ const tokens = new Map();
 function isAuthed(req, requiredScope = 'admin') {
     const authHeader = req.headers?.authorization;
     let token = null;
+    let isFromQuery = false;
     if (authHeader && authHeader.startsWith('Bearer ')) {
         token = authHeader.substring(7).trim();
     }
@@ -108,10 +109,12 @@ function isAuthed(req, requiredScope = 'admin') {
     if (!token && requiredScope !== 'admin') {
         if (req.query && req.query.token) {
             token = req.query.token;
+            isFromQuery = true;
         } else if (req.url) {
             try {
                 const parsedUrl = new URL(req.url, 'http://localhost');
                 token = parsedUrl.searchParams.get('token');
+                if (token) isFromQuery = true;
             } catch (_) {}
         }
     }
@@ -134,6 +137,9 @@ function isAuthed(req, requiredScope = 'admin') {
                             return tokenScope === 'admin' && payload.u === APP_USER;
                         }
                         if (requiredScope === 'export') {
+                            if (isFromQuery) {
+                                return tokenScope === 'export';
+                            }
                             return tokenScope === 'export' || (tokenScope === 'admin' && payload.u === APP_USER);
                         }
                         return tokenScope === requiredScope;

@@ -3,6 +3,7 @@ const { getTodayWIB, getHourWIB, getDueDateDetails, getOverdueDetails, getMonths
 const { escapeHtml } = require('../utils/security');
 const { sendUnifiedWhatsApp } = require('./whatsapp');
 const { generateMonthlyInvoices } = require('./billing');
+const { createDatabaseBackup } = require('./tracefund');
 
 let nodemailer;
 try {
@@ -268,9 +269,18 @@ function startBackgroundSchedulers() {
     const hourlySchedulerTimer = setInterval(() => {
         runReminderCheck().catch(err => console.error('[Scheduler] Error auto-scheduler:', err.message));
 
+        const hour = getHourWIB();
+        // Pencadangan database otomatis setiap hari pada pukul 02:00 WIB
+        if (hour === 2) {
+            try {
+                createDatabaseBackup();
+            } catch (err) {
+                console.error('[Auto-Backup] Gagal mencadangkan database:', err.message);
+            }
+        }
+
         const today = getTodayWIB();
         if (today.endsWith('-01')) {
-            const hour = getHourWIB();
             if (hour === 8) {
                 try {
                     const res = generateMonthlyInvoices();
@@ -286,6 +296,11 @@ function startBackgroundSchedulers() {
     hourlySchedulerTimer.unref();
 
     const startupReminderTimer = setTimeout(() => {
+        try {
+            createDatabaseBackup();
+        } catch (err) {
+            console.error('[Auto-Backup Startup] Gagal:', err.message);
+        }
         runReminderCheck().then(res => {
             if (res.length > 0) {
                 console.log(`[Auto-Reminder] Pengingat otomatis terkirim untuk ${res.length} tagihan.`);

@@ -6,6 +6,9 @@ const { formatMonthKey, formatMonthShortKey } = require('../utils/time');
 
 function createDatabaseBackup() {
     try {
+        if (!fs.existsSync(BACKUP_DIR)) {
+            fs.mkdirSync(BACKUP_DIR, { recursive: true });
+        }
         db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
         const now = new Date();
         const pad = (n) => String(n).padStart(2, '0');

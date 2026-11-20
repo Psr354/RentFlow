@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kontrakan Nenek Yuyun - Sistem Manajemen Sewa & Penagihan</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -3983,14 +3983,28 @@
         }
 
         // Proof Modal
-        function openProofModal(id, proofUrl, method, notes, remainingAmount) {
+        async function openProofModal(id, proofUrl, method, notes, remainingAmount) {
             const inv = invoicesData.find(i => i.id === id) || (currentDashboardStats?.pendingList || []).find(i => i.id === id);
             const pUrl = proofUrl || inv?.payment_proof || '';
             const pMethod = method || inv?.payment_method || 'Transfer';
             const pNotes = notes !== undefined ? notes : (inv?.notes || '-');
             const remaining = remainingAmount !== undefined ? remainingAmount : (inv ? (inv.remaining_amount !== undefined ? inv.remaining_amount : inv.amount) : 0);
 
-            document.getElementById('modal-proof-img').src = pUrl;
+            const imgEl = document.getElementById('modal-proof-img');
+            imgEl.src = '';
+            if (pUrl) {
+                try {
+                    const res = await fetch(pUrl, { headers: authHeaders() });
+                    if (res.ok) {
+                        const blob = await res.blob();
+                        imgEl.src = window.URL.createObjectURL(blob);
+                    } else {
+                        imgEl.src = pUrl;
+                    }
+                } catch (_) {
+                    imgEl.src = pUrl;
+                }
+            }
             document.getElementById('modal-proof-meta').innerHTML = `
                 <div class="grid grid-cols-2 gap-2">
                     <p><strong>ID Tagihan:</strong> ${escapeHtml(id)}</p>
@@ -4266,16 +4280,27 @@
         }
 
         // Ekspor CSV Transaksi Saldo Berjalan
-        function exportTraceFundCsv() {
-            const token = sessionStorage.getItem('admin_token') || '';
-            const downloadUrl = `/api/tracefund/export-csv?token=${encodeURIComponent(token)}`;
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = `transaksi-kontrakan-${new Date().toISOString().slice(0, 10)}.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            showToast('Mengunduh CSV transaksi ber-saldo berjalan');
+        async function exportTraceFundCsv() {
+            try {
+                showToast('Menyiapkan berkas CSV transaksi...');
+                const res = await fetch('/api/tracefund/export-csv', {
+                    headers: authHeaders()
+                });
+                if (res.status === 401) { handleLogout(); return; }
+                if (!res.ok) throw new Error('Gagal mengunduh CSV');
+                const blob = await res.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = `transaksi-kontrakan-${new Date().toISOString().slice(0, 10)}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+                showToast('Unduhan CSV transaksi berhasil.');
+            } catch (err) {
+                showToast('Gagal mengunduh berkas: ' + err.message, 'error');
+            }
         }
 
         // Complaints Management
@@ -4746,7 +4771,7 @@
             }
         }
 
-        function openComplaintPhotoModal(idOrUrl, title) {
+        async function openComplaintPhotoModal(idOrUrl, title) {
             let imgUrl = idOrUrl;
             let displayTitle = title;
             const c = complaintsData.find(item => item.id === idOrUrl);
@@ -4754,7 +4779,21 @@
                 imgUrl = c.photo_url || '';
                 displayTitle = `${c.room_number || ''} - ${c.tenant_name || ''}`;
             }
-            document.getElementById('modal-complaint-img').src = imgUrl;
+            const imgEl = document.getElementById('modal-complaint-img');
+            imgEl.src = '';
+            if (imgUrl) {
+                try {
+                    const res = await fetch(imgUrl, { headers: authHeaders() });
+                    if (res.ok) {
+                        const blob = await res.blob();
+                        imgEl.src = window.URL.createObjectURL(blob);
+                    } else {
+                        imgEl.src = imgUrl;
+                    }
+                } catch (_) {
+                    imgEl.src = imgUrl;
+                }
+            }
             document.getElementById('modal-complaint-title').innerText = 'Foto Kerusakan: ' + (displayTitle || '-');
             document.getElementById('modal-complaint-photo').classList.remove('hidden');
             lucide.createIcons();

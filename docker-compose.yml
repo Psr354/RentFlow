@@ -4,7 +4,7 @@ services:
     container_name: kontrakan_yuyun
     restart: unless-stopped
     ports:
-      - "3001:5000"
+      - "127.0.0.1:3001:5000"
     environment:
       - NODE_ENV=production
       - PORT=5000
@@ -16,6 +16,3 @@ services:
       - DATA_DIR=/app/data
     volumes:
       - ./data:/app/data
-      - ./server.js:/app/server.js
-      - ./src:/app/src
-      - ./public:/app/public
