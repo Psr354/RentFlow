@@ -9,6 +9,15 @@ function recalculateInvoiceStatus(invoiceId, clearVerification = false) {
     const payments = db.prepare('SELECT * FROM invoice_payments WHERE invoice_id = ? ORDER BY payment_date ASC').all(invoiceId);
     const paid = payments.reduce((acc, p) => acc + p.amount, 0);
 
+    // Proteksi: Jika tidak ada baris cicilan di invoice_payments tetapi invoice sudah berstatus LUNAS, pertahankan status LUNAS
+    if (payments.length === 0 && invoice.status === 'LUNAS' && !clearVerification) {
+        return {
+            status: 'LUNAS',
+            paid_amount: invoice.amount,
+            remaining_amount: 0
+        };
+    }
+
     let newStatus = 'BELUM_BAYAR';
     let paidAt = null;
     let method = invoice.payment_method;
@@ -17,8 +26,8 @@ function recalculateInvoiceStatus(invoiceId, clearVerification = false) {
 
     if (paid >= invoice.amount) {
         newStatus = 'LUNAS';
-        paidAt = lastPayment ? (lastPayment.payment_date + 'T12:00:00Z') : new Date().toISOString();
-        method = lastPayment ? lastPayment.payment_method : 'TRANSFER';
+        paidAt = lastPayment ? (lastPayment.payment_date + 'T12:00:00Z') : (invoice.paid_at || new Date().toISOString());
+        method = lastPayment ? lastPayment.payment_method : (invoice.payment_method || 'TRANSFER');
     } else if (paid > 0) {
         newStatus = 'SEBAGIAN';
         method = lastPayment ? lastPayment.payment_method : 'TRANSFER';

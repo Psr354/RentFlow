@@ -427,6 +427,24 @@ async function testTraceFundCommands() {
                 const delInv = await makeRequest(port, 'DELETE', `/api/invoices/${testInvId}`);
                 assert.strictEqual(delInv.statusCode, 200);
 
+                // 11.2b Test Preservasi Status Tagihan Legacy Lunas saat Diedit
+                const testLegacyInvId = 'test-legacy-lunas';
+                appDb.prepare(`
+                    INSERT INTO invoices (id, room_id, month_year, amount, due_date, status, paid_at)
+                    VALUES (?, ?, 'Januari 2025', 1000000, '2025-01-05', 'LUNAS', '2025-01-05T10:00:00Z')
+                `).run(testLegacyInvId, testRoomId);
+
+                const putLegacyRes = await makeRequest(port, 'PUT', `/api/invoices/${testLegacyInvId}`, {
+                    notes: 'Catatan tambahan tagihan legacy'
+                });
+                assert.strictEqual(putLegacyRes.statusCode, 200);
+                assert.strictEqual(putLegacyRes.body.invoice.status, 'LUNAS', 'Status tagihan legacy lunas HARUS tetap LUNAS setelah diedit');
+                const checkLegacyDb = appDb.prepare('SELECT status, paid_at FROM invoices WHERE id = ?').get(testLegacyInvId);
+                assert.strictEqual(checkLegacyDb.status, 'LUNAS');
+                assert(checkLegacyDb.paid_at !== null, 'paid_at tidak boleh di-reset menjadi null');
+
+                await makeRequest(port, 'DELETE', `/api/invoices/${testLegacyInvId}`);
+
                 // DELETE Room
                 const delRoom = await makeRequest(port, 'DELETE', `/api/rooms/${testRoomId}`);
                 assert.strictEqual(delRoom.statusCode, 200);
