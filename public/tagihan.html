@@ -651,6 +651,13 @@
             const selectionSection = document.getElementById('payment-selection-section');
             const paidSection = document.getElementById('paid-action-section');
 
+            // Cek apakah ada catatan penolakan verifikasi sebelumnya
+            let rejectionReason = null;
+            if (invoiceData.notes && invoiceData.notes.includes('[Verifikasi Ditolak:')) {
+                const match = invoiceData.notes.match(/\[Verifikasi Ditolak:\s*([^\]]+)\]/);
+                if (match) rejectionReason = match[1].trim();
+            }
+
             if (invoiceData.status === 'LUNAS') {
                 badge.className = "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 border border-emerald-200";
                 badge.innerText = "Lunas";
@@ -671,18 +678,43 @@
             } else if (invoiceData.status === 'SEBAGIAN') {
                 badge.className = "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-amber-100 text-amber-900 border border-amber-300";
                 badge.innerText = "Sebagian (Dicicil)";
-                statusBox.className = "text-xs rounded-2xl p-4 bg-amber-50 border border-amber-200 text-amber-800 space-y-1";
-                statusBox.innerHTML = `
-                    <p class="font-bold">Pembayaran Sebagian Telah Diterima</p>
-                    <p class="text-[11px] text-amber-700">Sudah dibayar: <strong>${formatRupiah(paid)}</strong>. Sisa kewajiban sewa: <strong>${formatRupiah(remaining)}</strong>. Anda dapat menyelesaikan sisa tagihan di bawah ini.</p>
-                `;
+                if (rejectionReason) {
+                    statusBox.className = "text-xs rounded-2xl p-4 bg-rose-50 border border-rose-200 text-rose-800 space-y-1.5";
+                    statusBox.innerHTML = `
+                        <div class="flex items-center gap-2 font-bold text-rose-900">
+                            <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600"></i>
+                            <span>Konfirmasi Pembayaran Sebelumnya Belum Disetujui</span>
+                        </div>
+                        <p class="text-[11px] text-rose-700">Alasan Penolakan: <strong>${escapeHtml(rejectionReason)}</strong></p>
+                        <p class="text-[11px] text-rose-600">Sudah dibayar: <strong>${formatRupiah(paid)}</strong>, sisa kewajiban: <strong>${formatRupiah(remaining)}</strong>. Silakan periksa kembali dan kirimkan ulang bukti yang valid di bawah ini.</p>
+                    `;
+                } else {
+                    statusBox.className = "text-xs rounded-2xl p-4 bg-amber-50 border border-amber-200 text-amber-800 space-y-1";
+                    statusBox.innerHTML = `
+                        <p class="font-bold">Pembayaran Sebagian Telah Diterima</p>
+                        <p class="text-[11px] text-amber-700">Sudah dibayar: <strong>${formatRupiah(paid)}</strong>. Sisa kewajiban sewa: <strong>${formatRupiah(remaining)}</strong>. Anda dapat menyelesaikan sisa tagihan di bawah ini.</p>
+                    `;
+                }
                 statusBox.classList.remove('hidden');
                 selectionSection.classList.remove('hidden');
                 paidSection.classList.add('hidden');
             } else {
                 badge.className = "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-rose-100 text-rose-700 border border-rose-200";
                 badge.innerText = "Belum Bayar";
-                statusBox.classList.add('hidden');
+                if (rejectionReason) {
+                    statusBox.className = "text-xs rounded-2xl p-4 bg-rose-50 border border-rose-200 text-rose-800 space-y-1.5";
+                    statusBox.innerHTML = `
+                        <div class="flex items-center gap-2 font-bold text-rose-900">
+                            <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600"></i>
+                            <span>Konfirmasi Pembayaran Sebelumnya Belum Disetujui</span>
+                        </div>
+                        <p class="text-[11px] text-rose-700">Alasan Penolakan: <strong>${escapeHtml(rejectionReason)}</strong></p>
+                        <p class="text-[11px] text-rose-600">Silakan periksa kembali mutasi rekening atau struk bukti Anda, lalu unggah ulang bukti transfer yang benar di bawah ini.</p>
+                    `;
+                    statusBox.classList.remove('hidden');
+                } else {
+                    statusBox.classList.add('hidden');
+                }
                 selectionSection.classList.remove('hidden');
                 paidSection.classList.add('hidden');
             }

@@ -4077,6 +4077,11 @@
                     showToast(d.message || 'Pembayaran berhasil ditolak');
                     closeProofModal();
                     await loadAllData();
+                    if (d.waDirectUrl && !d.waSent) {
+                        if (confirm('WhatsApp Bot mandiri belum terhubung. Buka WhatsApp Web untuk mengirim pesan penolakan secara manual ke penghuni?')) {
+                            window.open(d.waDirectUrl, '_blank');
+                        }
+                    }
                 } else {
                     showToast(d.message || 'Gagal menolak pembayaran', 'danger');
                 }

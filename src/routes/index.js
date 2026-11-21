@@ -855,15 +855,22 @@ async function handleRequest(req, res) {
 
     if (req.method === 'POST' && pathname.endsWith('/reject') && pathname.startsWith('/api/invoices/')) {
         const id = decodeURIComponent(pathname.replace('/api/invoices/', '').replace('/reject', ''));
-        readBody(req, res, (body) => {
+        readBody(req, res, async (body) => {
             try {
                 const { reason } = JSON.parse(body || '{}');
-                const inv = db.prepare('SELECT * FROM invoices WHERE id = ?').get(id);
+                const inv = db.prepare(`
+                    SELECT i.*, r.number as room_number, r.tenant_name, r.tenant_phone, r.tenant_email
+                    FROM invoices i
+                    JOIN rooms r ON i.room_id = r.id
+                    WHERE i.id = ?
+                `).get(id);
                 if (!inv) return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
+
+                const cleanReason = reason ? String(reason).trim() : 'Bukti transfer tidak valid atau dana belum masuk ke rekening';
 
                 db.exec('BEGIN IMMEDIATE;');
                 try {
-                    const rejectNote = `[Verifikasi Ditolak: ${reason ? String(reason).trim() : 'Bukti transfer tidak valid/dana belum masuk'}]`;
+                    const rejectNote = `[Verifikasi Ditolak: ${cleanReason}]`;
                     const combinedNotes = inv.notes ? `${inv.notes} ${rejectNote}` : rejectNote;
 
                     if (inv.payment_proof) {
@@ -882,9 +889,45 @@ async function handleRequest(req, res) {
                     const resStatus = recalculateInvoiceStatus(id, true);
                     db.exec('COMMIT;');
 
+                    // Kirim notifikasi WhatsApp otomatis ke penghuni jika nomor telepon terdaftar
+                    const settings = getSettings();
+                    const baseUrl = settings.base_url || 'https://sekeluarga.web.id';
+                    const tokenParam = inv.access_token ? `&token=${encodeURIComponent(inv.access_token)}` : '';
+                    const payUrl = `${baseUrl}/tagihan.html?id=${encodeURIComponent(inv.id)}${tokenParam}`;
+
+                    const waMessage = `Halo Kak ${inv.tenant_name || ''},\n\n` +
+                        `Pemberitahuan dari *${settings.app_name || 'Kontrakan Nenek Yuyun'}*:\n` +
+                        `Konfirmasi pembayaran sewa untuk unit *${inv.room_number}* (Periode: *${inv.month_year}*) belum dapat disetujui.\n\n` +
+                        `*Alasan Penolakan:*\n"${cleanReason}"\n\n` +
+                        `Mohon periksa kembali transaksi Anda dan unggah ulang bukti transfer yang valid melalui tautan resmi berikut:\n${payUrl}\n\n` +
+                        `Jika ada pertanyaan, silakan hubungi pemilik kontrakan. Terima kasih.`;
+
+                    let waRes = null;
+                    if (inv.tenant_phone) {
+                        try {
+                            waRes = await sendUnifiedWhatsApp(inv.tenant_phone, waMessage);
+                            logNotification(
+                                inv.id,
+                                'WHATSAPP',
+                                inv.tenant_phone,
+                                waRes && waRes.success ? 'SUCCESS' : 'FAILED',
+                                waRes && waRes.success ? `Penolakan terkirim via ${waRes.method || 'WA'}` : (waRes?.error || 'Gagal kirim WA penolakan')
+                            );
+                        } catch (err) {
+                            logNotification(inv.id, 'WHATSAPP', inv.tenant_phone, 'FAILED', err.message);
+                        }
+                    }
+
+                    const cleanPhone = (inv.tenant_phone || '').replace(/[^0-9]/g, '');
+                    const waDirectUrl = cleanPhone 
+                        ? `https://wa.me/${cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone}?text=${encodeURIComponent(waMessage)}`
+                        : null;
+
                     return send(res, 200, {
                         success: true,
-                        message: 'Verifikasi pembayaran berhasil ditolak',
+                        message: 'Verifikasi pembayaran berhasil ditolak' + (waRes && waRes.success ? ' dan pesan WhatsApp telah dikirim ke penghuni.' : '.'),
+                        waSent: Boolean(waRes && waRes.success),
+                        waDirectUrl,
                         ...resStatus
                     });
                 } catch (err) {
