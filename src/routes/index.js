@@ -130,19 +130,19 @@ async function handleRequest(req, res) {
             const isAdmin = isAuthed(req, 'admin');
             let isAuthorized = isAdmin;
             if (!isAuthorized) {
-                // Format: proof_<invoiceId>_<timestamp>_<safeId>.<ext>
-                const parts = filename.split('_');
-                if (parts.length >= 3) {
-                    const invoiceId = parts[1];
-                    const token = query.token || '';
-                    if (token && invoiceId) {
-                        try {
-                            const inv = db.prepare('SELECT access_token FROM invoices WHERE id = ?').get(invoiceId);
-                            if (inv && inv.access_token && inv.access_token === token) {
-                                isAuthorized = true;
-                            }
-                        } catch (_) {}
-                    }
+                // Ekstraksi invoiceId: di antara 'proof_' dan '_<timestamp>_<safeId>.<ext>'
+                const nameWithoutPrefix = filename.replace(/^proof_/, '');
+                const lastUnder = nameWithoutPrefix.lastIndexOf('_');
+                const prevUnder = lastUnder !== -1 ? nameWithoutPrefix.lastIndexOf('_', lastUnder - 1) : -1;
+                const invoiceId = prevUnder !== -1 ? nameWithoutPrefix.slice(0, prevUnder) : null;
+                const token = query.token || '';
+                if (token && invoiceId) {
+                    try {
+                        const inv = db.prepare('SELECT access_token FROM invoices WHERE id = ?').get(invoiceId);
+                        if (inv && inv.access_token && constantTimeCompare(token, inv.access_token)) {
+                            isAuthorized = true;
+                        }
+                    } catch (_) {}
                 }
             }
 
@@ -222,7 +222,7 @@ async function handleRequest(req, res) {
 
             const reqToken = query.token || '';
             const isAuthorized = isAuthed(req);
-            const hasValidToken = Boolean(invoice.access_token && reqToken === invoice.access_token);
+            const hasValidToken = Boolean(invoice.access_token && reqToken && constantTimeCompare(reqToken, invoice.access_token));
 
             // Lindungi privasi penghuni jika diakses tanpa token akses resmi
             if (!isAuthorized && !hasValidToken) {
@@ -292,7 +292,7 @@ async function handleRequest(req, res) {
                     // Validasi token tagihan jika bukan admin terotentikasi
                     const sentToken = token || query.token || '';
                     if (!isAuthed(req)) {
-                        if (!invoice.access_token || !sentToken || sentToken !== invoice.access_token) {
+                        if (!invoice.access_token || !sentToken || !constantTimeCompare(sentToken, invoice.access_token)) {
                             return send(res, 403, { success: false, message: 'Akses ditolak: Token tagihan tidak valid' });
                         }
                     }
@@ -302,7 +302,15 @@ async function handleRequest(req, res) {
                     let proofPath = invoice.payment_proof || null;
                     if (proof_image) {
                         const savedPath = saveBase64Image(proof_image, `proof_${invoiceId}`);
-                        if (savedPath) proofPath = savedPath;
+                        if (savedPath) {
+                            if (invoice.payment_proof) {
+                                const oldFile = path.join(UPLOAD_DIR, path.basename(invoice.payment_proof));
+                                if (fs.existsSync(oldFile)) {
+                                    try { fs.unlinkSync(oldFile); } catch (_) {}
+                                }
+                            }
+                            proofPath = savedPath;
+                        }
                     }
 
                     const combinedNotes = (notes ? `${notes} ` : '') + `[Konfirmasi: Rp ${payNominal.toLocaleString('id-ID')}]`;
@@ -369,8 +377,11 @@ async function handleRequest(req, res) {
                 try {
                     const data = JSON.parse(body || '{}');
                     const { room_id, tenant_name, tenant_phone, category, description, photo_image } = data;
-                    if (!room_id || !description) {
-                        return send(res, 400, { success: false, message: 'Unit dan deskripsi keluhan wajib diisi' });
+                    if (!room_id || !description || typeof description !== 'string' || description.trim().length < 3) {
+                        return send(res, 400, { success: false, message: 'Unit dan deskripsi keluhan wajib diisi dengan jelas' });
+                    }
+                    if (description.trim().length > 3000) {
+                        return send(res, 400, { success: false, message: 'Deskripsi keluhan melebihi batas maksimal 3000 karakter' });
                     }
                     const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(room_id);
                     if (!room) return send(res, 404, { success: false, message: 'Unit kontrakan tidak ditemukan' });
@@ -635,6 +646,7 @@ async function handleRequest(req, res) {
                 const invRows = db.prepare('SELECT id FROM invoices WHERE room_id = ?').all(id);
                 for (const inv of invRows) {
                     db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(inv.id);
+                    db.prepare('DELETE FROM notification_logs WHERE invoice_id = ?').run(inv.id);
                 }
                 db.prepare('DELETE FROM invoices WHERE room_id = ?').run(id);
                 db.prepare('DELETE FROM complaints WHERE room_id = ?').run(id);

@@ -115,7 +115,7 @@ function allocatePaymentFIFO({ roomId, amount, paymentMethod = 'TRANSFER', payme
             const portion = Math.min(pool, needed);
             pool -= portion;
 
-            const payId = `PAY-${Date.now()}-${idx + 1}`;
+            const payId = `PAY-${Date.now()}-${idx + 1}-${crypto.randomBytes(4).toString('hex')}`;
             const noteStr = notes 
                 ? `${notes} (FIFO: ${inv.month_year})`
                 : `Alokasi FIFO tunggakan terlama (${inv.month_year})`;
@@ -275,7 +275,10 @@ function generateMonthlyInvoices(targetMonthYear = null, targetDueYm = null) {
         for (const r of occupiedRooms) {
             const exists = db.prepare('SELECT id FROM invoices WHERE room_id = ? AND month_year = ?').get(r.id, month_year);
             if (!exists) {
-                const dayStr = String(r.due_day || 1).padStart(2, '0');
+                const [y, m] = ym.split('-').map(Number);
+                const maxDays = new Date(y, m, 0).getDate();
+                const targetDay = Math.min(Math.max(Number(r.due_day || 1), 1), maxDays);
+                const dayStr = String(targetDay).padStart(2, '0');
                 const dueDate = `${ym}-${dayStr}`;
                 const invId = `INV-${ym.replace('-', '')}-${r.number.replace(/\s+/g, '').toUpperCase()}-${crypto.randomBytes(4).toString('hex')}`;
                 const token = crypto.randomBytes(12).toString('hex');

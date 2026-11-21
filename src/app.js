@@ -1,6 +1,17 @@
 const http = require('node:http');
+const net = require('node:net');
 const { handleRequest } = require('./routes/index');
 const { db } = require('./config/database');
+
+function isPrivateIpv4(ip) {
+    if (!net.isIPv4(ip)) return false;
+    const parts = ip.split('.').map(n => parseInt(n, 10));
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 127) return true;
+    return false;
+}
 
 function isTrustedOrigin(origin) {
     if (!origin || typeof origin !== 'string') return false;
@@ -8,12 +19,8 @@ function isTrustedOrigin(origin) {
         const u = new URL(origin);
         if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
         const host = u.hostname.toLowerCase();
-        return host === 'localhost' || 
-            host === '127.0.0.1' || 
-            host === 'sekeluarga.web.id' ||
-            host.startsWith('192.168.') ||
-            host.startsWith('10.') ||
-            host.startsWith('172.');
+        if (host === 'localhost' || host === '127.0.0.1' || host === 'sekeluarga.web.id') return true;
+        return isPrivateIpv4(host);
     } catch (_) {
         return false;
     }
@@ -36,7 +43,7 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    res.setHeader('Content-Security-Policy', "default-src 'self' data:; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-ancestors 'self';");
+    res.setHeader('Content-Security-Policy', "default-src 'self' data:; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self'; frame-ancestors 'self';");
 
     if (req.method === 'OPTIONS') {
         res.writeHead(204);

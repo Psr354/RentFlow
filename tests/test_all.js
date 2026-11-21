@@ -721,10 +721,20 @@ async function testTraceFundCommands() {
                 assert.strictEqual(resPublicWithToken.statusCode, 200);
                 assert.strictEqual(resPublicWithToken.body.payments[0].notes, 'Catatan rahasia nomor rekening 123456789 (FIFO: Januari 2027)', 'Catatan pembayaran ditampilkan jika token akses sah');
 
-                // 11.20 Pengujian Security Headers (CSP & Permissions-Policy)
+                // 11.20 Pengujian Security Headers (CSP & Permissions-Policy & CORS)
                 const resHeaders = await makeRequest(port, 'GET', '/health', null, {});
                 assert(resHeaders.headers['content-security-policy'], 'Header Content-Security-Policy HARUS disematkan');
                 assert.strictEqual(resHeaders.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()', 'Header Permissions-Policy HARUS disematkan');
+
+                // Uji CORS Origin
+                const resCorsMalicious = await makeRequest(port, 'GET', '/api/stats', null, { 'Origin': 'http://10.attacker.com' });
+                assert.strictEqual(resCorsMalicious.headers['access-control-allow-origin'], undefined, 'Domain penyerang 10.attacker.com TIDAK boleh diizinkan CORS');
+
+                const resCorsValidLan = await makeRequest(port, 'GET', '/api/stats', null, { 'Origin': 'http://192.168.1.100:3000' });
+                assert.strictEqual(resCorsValidLan.headers['access-control-allow-origin'], 'http://192.168.1.100:3000', 'IP LAN privat 192.168.1.100 HARUS diizinkan CORS');
+
+                const resCorsValidHost = await makeRequest(port, 'GET', '/api/stats', null, { 'Origin': 'https://sekeluarga.web.id' });
+                assert.strictEqual(resCorsValidHost.headers['access-control-allow-origin'], 'https://sekeluarga.web.id', 'Domain resmi sekeluarga.web.id HARUS diizinkan CORS');
 
                 // 11.21 Pengujian Kontrol Akses Berkas Bukti Pembayaran (/uploads/proof_*)
                 const dummyProofFile = `proof_${testInvTokenId}_${Date.now()}_abc123.jpg`;
@@ -743,6 +753,22 @@ async function testTraceFundCommands() {
                 assert.strictEqual(resProofAdminAuth.statusCode, 200, 'Akses berkas bukti oleh admin HARUS diizinkan (200)');
 
                 try { fs.unlinkSync(dummyProofPath); } catch (_) {}
+
+                // Uji akses berkas bukti dengan ID invoice yang mengandung underscore (misal INV_2027_01)
+                const dummyUnderscoreFile = `proof_INV_2027_01_TEST_${Date.now()}_abc123.jpg`;
+                const dummyUnderscorePath = path.join(UPLOAD_DIR, dummyUnderscoreFile);
+                fs.writeFileSync(dummyUnderscorePath, Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]));
+
+                appDb.prepare(`
+                    INSERT INTO invoices (id, room_id, month_year, amount, due_date, status, access_token)
+                    VALUES ('INV_2027_01_TEST', 'unit-a', 'Januari 2027', 800000, '2027-01-01', 'BELUM_BAYAR', 'token_underscore_456')
+                `).run();
+
+                const resProofUnderscore = await makeRequest(port, 'GET', `/uploads/${dummyUnderscoreFile}?token=token_underscore_456`, null, {});
+                assert.strictEqual(resProofUnderscore.statusCode, 200, 'Akses berkas bukti dengan ID ber-underscore dan token sah HARUS diizinkan (200)');
+
+                try { fs.unlinkSync(dummyUnderscorePath); } catch (_) {}
+                appDb.prepare("DELETE FROM invoices WHERE id = 'INV_2027_01_TEST'").run();
 
                 // 11.22 Penolakan Token Admin via Query Param pada Ekspor CSV
                 const resCsvAdminQuery = await makeRequest(port, 'GET', `/api/tracefund/export-csv?token=${adminToken}`, null, {});

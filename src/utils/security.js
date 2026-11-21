@@ -14,6 +14,13 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+function constantTimeCompare(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const hashA = crypto.createHash('sha256').update(a).digest();
+    const hashB = crypto.createHash('sha256').update(b).digest();
+    return crypto.timingSafeEqual(hashA, hashB);
+}
+
 // Autentikasi Admin Berbasis Token Kriptografis (HMAC-SHA256)
 let JWT_SECRET = process.env.JWT_SECRET || getSettings().jwt_secret;
 if (!JWT_SECRET) {
@@ -50,29 +57,35 @@ function getClientIp(req) {
     const remote = req.socket?.remoteAddress || '127.0.0.1';
     const trustProxy = process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true';
     if (trustProxy && req.headers) {
-        const isLocalOrPrivate = remote === '127.0.0.1' ||
-            remote === '::1' ||
-            remote === '::ffff:127.0.0.1' ||
-            remote.startsWith('10.') ||
-            remote.startsWith('172.16.') ||
-            remote.startsWith('172.17.') ||
-            remote.startsWith('172.18.') ||
-            remote.startsWith('172.19.') ||
-            remote.startsWith('172.20.') ||
-            remote.startsWith('172.21.') ||
-            remote.startsWith('172.22.') ||
-            remote.startsWith('172.23.') ||
-            remote.startsWith('172.24.') ||
-            remote.startsWith('172.25.') ||
-            remote.startsWith('172.26.') ||
-            remote.startsWith('172.27.') ||
-            remote.startsWith('172.28.') ||
-            remote.startsWith('172.29.') ||
-            remote.startsWith('172.30.') ||
-            remote.startsWith('172.31.') ||
-            remote.startsWith('192.168.');
+        let isTrusted = false;
+        if (process.env.TRUSTED_PROXY_IPS) {
+            const list = process.env.TRUSTED_PROXY_IPS.split(',').map(s => s.trim());
+            isTrusted = list.includes(remote);
+        } else {
+            isTrusted = remote === '127.0.0.1' ||
+                remote === '::1' ||
+                remote === '::ffff:127.0.0.1' ||
+                remote.startsWith('10.') ||
+                remote.startsWith('172.16.') ||
+                remote.startsWith('172.17.') ||
+                remote.startsWith('172.18.') ||
+                remote.startsWith('172.19.') ||
+                remote.startsWith('172.20.') ||
+                remote.startsWith('172.21.') ||
+                remote.startsWith('172.22.') ||
+                remote.startsWith('172.23.') ||
+                remote.startsWith('172.24.') ||
+                remote.startsWith('172.25.') ||
+                remote.startsWith('172.26.') ||
+                remote.startsWith('172.27.') ||
+                remote.startsWith('172.28.') ||
+                remote.startsWith('172.29.') ||
+                remote.startsWith('172.30.') ||
+                remote.startsWith('172.31.') ||
+                remote.startsWith('192.168.');
+        }
 
-        if (isLocalOrPrivate) {
+        if (isTrusted) {
             const xff = req.headers['x-forwarded-for'];
             if (xff) {
                 const first = String(xff).split(',')[0].trim();
@@ -282,6 +295,7 @@ function serveStaticFile(res, filePath, contentType) {
 
 module.exports = {
     escapeHtml,
+    constantTimeCompare,
     JWT_SECRET,
     WA_WEBHOOK_SECRET,
     verifyWebhookSecret,
