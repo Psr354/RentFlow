@@ -637,9 +637,11 @@ async function handleRequest(req, res) {
             db.exec('BEGIN IMMEDIATE;');
             try {
                 const invRows = db.prepare('SELECT id FROM invoices WHERE room_id = ?').all(id);
+                const delPayStmt = db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?');
+                const delNotifStmt = db.prepare('DELETE FROM notification_logs WHERE invoice_id = ?');
                 for (const inv of invRows) {
-                    db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(inv.id);
-                    db.prepare('DELETE FROM notification_logs WHERE invoice_id = ?').run(inv.id);
+                    delPayStmt.run(inv.id);
+                    delNotifStmt.run(inv.id);
                 }
                 db.prepare('DELETE FROM invoices WHERE room_id = ?').run(id);
                 db.prepare('DELETE FROM complaints WHERE room_id = ?').run(id);
@@ -851,8 +853,53 @@ async function handleRequest(req, res) {
         return;
     }
 
+    if (req.method === 'POST' && pathname.endsWith('/reject') && pathname.startsWith('/api/invoices/')) {
+        const id = decodeURIComponent(pathname.replace('/api/invoices/', '').replace('/reject', ''));
+        readBody(req, res, (body) => {
+            try {
+                const { reason } = JSON.parse(body || '{}');
+                const inv = db.prepare('SELECT * FROM invoices WHERE id = ?').get(id);
+                if (!inv) return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
+
+                db.exec('BEGIN IMMEDIATE;');
+                try {
+                    const rejectNote = `[Verifikasi Ditolak: ${reason ? String(reason).trim() : 'Bukti transfer tidak valid/dana belum masuk'}]`;
+                    const combinedNotes = inv.notes ? `${inv.notes} ${rejectNote}` : rejectNote;
+
+                    if (inv.payment_proof) {
+                        const oldFile = path.join(UPLOAD_DIR, path.basename(inv.payment_proof));
+                        if (fs.existsSync(oldFile)) {
+                            try { fs.unlinkSync(oldFile); } catch (_) {}
+                        }
+                    }
+
+                    db.prepare(`
+                        UPDATE invoices
+                        SET payment_proof = NULL, notes = ?
+                        WHERE id = ?
+                    `).run(combinedNotes, id);
+
+                    const resStatus = recalculateInvoiceStatus(id, true);
+                    db.exec('COMMIT;');
+
+                    return send(res, 200, {
+                        success: true,
+                        message: 'Verifikasi pembayaran berhasil ditolak',
+                        ...resStatus
+                    });
+                } catch (err) {
+                    db.exec('ROLLBACK;');
+                    return send(res, 500, { success: false, message: 'Gagal menolak verifikasi: ' + err.message });
+                }
+            } catch (err) {
+                return send(res, 400, { success: false, message: 'Payload tidak valid: ' + err.message });
+            }
+        });
+        return;
+    }
+
     if (req.method === 'POST' && pathname.endsWith('/notify') && pathname.startsWith('/api/invoices/')) {
-        const id = pathname.replace('/api/invoices/', '').replace('/notify', '');
+        const id = decodeURIComponent(pathname.replace('/api/invoices/', '').replace('/notify', ''));
         readBody(req, res, async (body) => {
             try {
                 const { channel } = JSON.parse(body || '{}');
@@ -933,7 +980,7 @@ async function handleRequest(req, res) {
         }
     }
 
-    if (pathname.startsWith('/api/invoices/') && !pathname.includes('/payments') && !pathname.includes('/pay') && !pathname.includes('/notify')) {
+    if (pathname.startsWith('/api/invoices/') && !pathname.includes('/payments') && !pathname.includes('/pay') && !pathname.includes('/notify') && !pathname.includes('/reject')) {
         const id = decodeURIComponent(pathname.replace('/api/invoices/', ''));
         if (req.method === 'PUT') {
             readBody(req, res, (body) => {
@@ -1107,7 +1154,7 @@ async function handleRequest(req, res) {
     }
 
     if (pathname.startsWith('/api/complaints/') && pathname.endsWith('/status')) {
-        const id = pathname.replace('/api/complaints/', '').replace('/status', '');
+        const id = decodeURIComponent(pathname.replace('/api/complaints/', '').replace('/status', ''));
         if (req.method === 'POST') {
             readBody(req, res, (body) => {
                 try {

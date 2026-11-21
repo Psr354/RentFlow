@@ -584,7 +584,7 @@ async function testTraceFundCommands() {
 
                 // 11.8 Pengujian Keamanan Webhook WhatsApp
                 const resNoSecret = await makeRequest(port, 'POST', '/api/webhook/whatsapp', {
-                    sender: '08812552006',
+                    sender: '081234567890',
                     message: '#saldo'
                 }, { 'Content-Type': 'application/json' });
                 assert.strictEqual(resNoSecret.statusCode, 401, 'Webhook tanpa x-webhook-secret HARUS ditolak dengan status 401');
@@ -817,6 +817,37 @@ async function testTraceFundCommands() {
                 createDatabaseBackup();
                 const backupFiles = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('kontrakan-') && f.endsWith('.db'));
                 assert(backupFiles.length > 0, 'Fungsi createDatabaseBackup HARUS menghasilkan berkas backup .db di BACKUP_DIR');
+
+                // 11.25 Pengujian Endpoint Penolakan Verifikasi Pembayaran (POST /api/invoices/:id/reject)
+                const rejectInvId = 'INV_TEST_REJECT_1';
+                const dummyRejectFile = `proof_${rejectInvId}_${Date.now()}_rej.jpg`;
+                const dummyRejectPath = path.join(UPLOAD_DIR, dummyRejectFile);
+                fs.writeFileSync(dummyRejectPath, Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]));
+
+                appDb.prepare(`
+                    INSERT INTO invoices (id, room_id, month_year, amount, due_date, status, payment_proof, access_token)
+                    VALUES (?, ?, 'Maret 2027', 900000, '2027-03-01', 'MENUNGGU_VERIFIKASI', ?, 'rej_token_123')
+                `).run(rejectInvId, privRoomId, `/uploads/${dummyRejectFile}`);
+
+                const resRejectNoAuth = await makeRequest(port, 'POST', `/api/invoices/${rejectInvId}/reject`, {
+                    reason: 'Bukti palsu'
+                }, {});
+                assert.strictEqual(resRejectNoAuth.statusCode, 401, 'Tolak verifikasi tanpa otentikasi admin HARUS 401');
+
+                const resRejectAuth = await makeRequest(port, 'POST', `/api/invoices/${rejectInvId}/reject`, {
+                    reason: 'Bukti transfer buram/tidak terbaca'
+                });
+                assert.strictEqual(resRejectAuth.statusCode, 200, 'Tolak verifikasi oleh admin HARUS 200');
+                assert.strictEqual(resRejectAuth.body.success, true);
+                assert.strictEqual(resRejectAuth.body.status, 'BELUM_BAYAR', 'Status tagihan HARUS kembali ke BELUM_BAYAR');
+
+                const checkInvReject = appDb.prepare('SELECT status, payment_proof, notes FROM invoices WHERE id = ?').get(rejectInvId);
+                assert.strictEqual(checkInvReject.status, 'BELUM_BAYAR');
+                assert.strictEqual(checkInvReject.payment_proof, null, 'payment_proof HARUS dihapus');
+                assert(checkInvReject.notes.includes('Verifikasi Ditolak'), 'Catatan HARUS memuat alasan penolakan');
+                assert(!fs.existsSync(dummyRejectPath), 'Berkas bukti fisik HARUS dihapus saat penolakan');
+
+                appDb.prepare('DELETE FROM invoices WHERE id = ?').run(rejectInvId);
 
                 appServer.close(resolve);
             } catch (err) {

@@ -168,7 +168,7 @@ const existingSettings = getSettings();
 const defaultSettings = {
     app_name: 'Kontrakan Nenek Yuyun',
     owner_name: 'Ibu Hj. Yuyun',
-    owner_phone: '08812552006',
+    owner_phone: '081234567890',
     bank_name: 'BCA',
     bank_account: '1234567890',
     bank_holder: 'Nenek Yuyun',

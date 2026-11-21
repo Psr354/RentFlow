@@ -270,10 +270,12 @@ function generateMonthlyInvoices(targetMonthYear = null, targetDueYm = null) {
         VALUES (?, ?, ?, ?, ?, 'BELUM_BAYAR', ?, ?)
     `);
 
+    const existsStmt = db.prepare('SELECT id FROM invoices WHERE room_id = ? AND month_year = ?');
+
     db.exec('BEGIN IMMEDIATE;');
     try {
         for (const r of occupiedRooms) {
-            const exists = db.prepare('SELECT id FROM invoices WHERE room_id = ? AND month_year = ?').get(r.id, month_year);
+            const exists = existsStmt.get(r.id, month_year);
             if (!exists) {
                 const [y, m] = ym.split('-').map(Number);
                 const maxDays = new Date(y, m, 0).getDate();

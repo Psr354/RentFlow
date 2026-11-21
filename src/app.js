@@ -20,6 +20,10 @@ function isTrustedOrigin(origin) {
         if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
         const host = u.hostname.toLowerCase();
         if (host === 'localhost' || host === '127.0.0.1' || host === 'sekeluarga.web.id') return true;
+        if (process.env.ALLOWED_ORIGINS) {
+            const allowed = process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim().toLowerCase());
+            if (allowed.includes(host)) return true;
+        }
         return isPrivateIpv4(host);
     } catch (_) {
         return false;

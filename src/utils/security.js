@@ -71,13 +71,13 @@ function getClientIp(req) {
         }
 
         if (isTrusted) {
+            const realIp = req.headers['x-real-ip'];
+            if (realIp) return String(realIp).trim();
             const xff = req.headers['x-forwarded-for'];
             if (xff) {
                 const first = String(xff).split(',')[0].trim();
                 if (first) return first;
             }
-            const realIp = req.headers['x-real-ip'];
-            if (realIp) return String(realIp).trim();
         }
     }
     return remote;
@@ -95,6 +95,16 @@ function createAuthToken(username, scope = 'admin', expiresInMs = (14 * 24 * 60 
 }
 
 const tokens = new Map();
+const rawMapSet = tokens.set.bind(tokens);
+tokens.set = function(key, value) {
+    if (tokens.size > 200) {
+        const now = Date.now();
+        for (const [t, exp] of tokens.entries()) {
+            if (exp < now) tokens.delete(t);
+        }
+    }
+    return rawMapSet(key, value);
+};
 
 function isAuthed(req, requiredScope = 'admin') {
     const authHeader = req.headers?.authorization;
