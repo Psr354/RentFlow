@@ -2,8 +2,17 @@ const assert = require('node:assert');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+
+// Gunakan direktori data dan basis data terisolasi agar pengujian tidak mencemari database operasional
+const testDataDir = path.join(os.tmpdir(), `kontrakan_test_${Date.now()}_${process.pid}`);
+process.env.DATA_DIR = testDataDir;
+process.env.DB_PATH = path.join(testDataDir, 'test_kontrakan.db');
+process.env.UPLOAD_DIR = path.join(testDataDir, 'uploads');
+process.env.BACKUP_DIR = path.join(testDataDir, 'backups');
+process.env.NODE_ENV = 'test';
 
 console.log('--- Menjalankan Pengujian Sistem Kontrakan ---');
 
@@ -598,7 +607,7 @@ async function testTraceFundCommands() {
                     VALUES (?, ?, ?, ?, ?, 'BELUM_BAYAR', ?, ?)
                 `).run(testLeakInvId, validRoom.id, 'November 2026', 500000, '2026-11-20', 'leak-test-token-123', new Date().toISOString());
 
-                const resGetPublicInv = await makeRequest(port, 'GET', `/api/public/invoice/${testLeakInvId}`, null, {});
+                const resGetPublicInv = await makeRequest(port, 'GET', `/api/public/invoice/${testLeakInvId}?token=leak-test-token-123`, null, {});
                 assert.strictEqual(resGetPublicInv.statusCode, 200);
                 assert.strictEqual(resGetPublicInv.body.invoice.access_token, undefined, 'access_token TIDAK boleh dibocorkan pada GET /api/public/invoice/:id');
                 appDb.prepare('DELETE FROM invoices WHERE id = ?').run(testLeakInvId);
@@ -714,11 +723,10 @@ async function testTraceFundCommands() {
                 });
 
                 const resPublicNoToken = await makeRequest(port, 'GET', `/api/public/invoice/${testInvTokenId}`, null, {});
-                assert.strictEqual(resPublicNoToken.statusCode, 200);
-                assert.strictEqual(resPublicNoToken.body.payments[0].notes, null, 'Catatan pembayaran HARUS disensor jika diakses tanpa token akses');
+                assert.strictEqual(resPublicNoToken.statusCode, 403, 'Akses tagihan publik tanpa token HARUS ditolak (403)');
 
                 const resPublicWithToken = await makeRequest(port, 'GET', `/api/public/invoice/${testInvTokenId}?token=secret_token_123`, null, {});
-                assert.strictEqual(resPublicWithToken.statusCode, 200);
+                assert.strictEqual(resPublicWithToken.statusCode, 200, 'Akses dengan token sah HARUS diizinkan (200)');
                 assert.strictEqual(resPublicWithToken.body.payments[0].notes, 'Catatan rahasia nomor rekening 123456789 (FIFO: Januari 2027)', 'Catatan pembayaran ditampilkan jika token akses sah');
 
                 // 11.20 Pengujian Security Headers (CSP & Permissions-Policy & CORS)
@@ -761,8 +769,8 @@ async function testTraceFundCommands() {
 
                 appDb.prepare(`
                     INSERT INTO invoices (id, room_id, month_year, amount, due_date, status, access_token)
-                    VALUES ('INV_2027_01_TEST', 'unit-a', 'Januari 2027', 800000, '2027-01-01', 'BELUM_BAYAR', 'token_underscore_456')
-                `).run();
+                    VALUES ('INV_2027_01_TEST', ?, 'Januari 2027', 800000, '2027-01-01', 'BELUM_BAYAR', 'token_underscore_456')
+                `).run(privRoomId);
 
                 const resProofUnderscore = await makeRequest(port, 'GET', `/uploads/${dummyUnderscoreFile}?token=token_underscore_456`, null, {});
                 assert.strictEqual(resProofUnderscore.statusCode, 200, 'Akses berkas bukti dengan ID ber-underscore dan token sah HARUS diizinkan (200)');
@@ -770,16 +778,41 @@ async function testTraceFundCommands() {
                 try { fs.unlinkSync(dummyUnderscorePath); } catch (_) {}
                 appDb.prepare("DELETE FROM invoices WHERE id = 'INV_2027_01_TEST'").run();
 
-                // 11.22 Penolakan Token Admin via Query Param pada Ekspor CSV
+                // 11.22 Pengujian Kontrol Akses Berkas Foto Keluhan (/uploads/complaint_*)
+                const dummyComplaintFile = `complaint_test_${Date.now()}.jpg`;
+                const dummyComplaintPath = path.join(UPLOAD_DIR, dummyComplaintFile);
+                fs.writeFileSync(dummyComplaintPath, Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]));
+
+                const resComplaintNoAuth = await makeRequest(port, 'GET', `/uploads/${dummyComplaintFile}`, null, {});
+                assert.strictEqual(resComplaintNoAuth.statusCode, 403, 'Akses berkas keluhan tanpa otorisasi admin HARUS ditolak (403)');
+
+                const resComplaintAdminAuth = await makeRequest(port, 'GET', `/uploads/${dummyComplaintFile}`, null, {
+                    'Authorization': `Bearer ${adminToken}`
+                });
+                assert.strictEqual(resComplaintAdminAuth.statusCode, 200, 'Akses berkas keluhan dengan otorisasi admin HARUS diizinkan (200)');
+
+                try { fs.unlinkSync(dummyComplaintPath); } catch (_) {}
+
+                // 11.23 Penolakan Token Admin via Query Param pada Ekspor CSV & Sanitasi Formula Injection
                 const resCsvAdminQuery = await makeRequest(port, 'GET', `/api/tracefund/export-csv?token=${adminToken}`, null, {});
                 assert.strictEqual(resCsvAdminQuery.statusCode, 401, 'Token admin melalui query string HARUS ditolak (401) untuk mencegah kebocoran log');
 
-                const resCsvAdminBearer = await makeRequest(port, 'GET', '/api/tracefund/export-csv', null, {
+                // Sisipkan data bernuansa formula injection untuk memvalidasi sanitasi
+                appDb.prepare(`
+                    INSERT INTO general_incomes (id, date, amount, category, note, created_at)
+                    VALUES ('=cmd_id', '2027-01-01', 50000, '=HYPERLINK("http://evil.com")', 'Penjualan kardus', ?)
+                `).run(new Date().toISOString());
+
+                const resCsvAdminBearer = await makeRequest(port, 'GET', '/api/tracefund/export-csv?year=2027', null, {
                     'Authorization': `Bearer ${adminToken}`
                 });
                 assert.strictEqual(resCsvAdminBearer.statusCode, 200, 'Ekspor CSV dengan Bearer token admin HARUS diizinkan (200)');
+                assert(resCsvAdminBearer.body.includes("'\t=HYPERLINK"), 'Karakter formula pada CSV HARUS dinetralisasi dengan tanda kutip tunggal');
+                assert(resCsvAdminBearer.body.includes("'\t=cmd_id"), 'Karakter formula pada CSV HARUS dinetralisasi dengan tanda kutip tunggal');
 
-                // 11.23 Pengujian Otomatisasi Pencadangan Database TraceFund
+                appDb.prepare("DELETE FROM general_incomes WHERE id = '=cmd_id'").run();
+
+                // 11.24 Pengujian Otomatisasi Pencadangan Database TraceFund
                 const { createDatabaseBackup } = require('../src/services/tracefund.js');
                 createDatabaseBackup();
                 const backupFiles = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('kontrakan-') && f.endsWith('.db'));
@@ -795,8 +828,9 @@ async function testTraceFundCommands() {
     console.log('✓ [10/11] Kesiapan Produksi tervalidasi (Healthcheck, Security Headers, WAL Checkpoint, & Indexes).');
     console.log('✓ [11/11] Seluruh Operasi CRUD (Rooms, Invoices, Payments, Expenses, Incomes, Budgets, Complaints) tervalidasi 100%.');
 
-    // Bersihkan test DB
+    // Bersihkan test DB & data dir terisolasi
     if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+    try { fs.rmSync(testDataDir, { recursive: true, force: true }); } catch (_) {}
 
     console.log('\n--- SELURUH PENGUJIAN SISTEM BERHASIL DENGAN STATUS LULUS (100%) ---');
 }

@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     notified_h1 INTEGER DEFAULT 0,
     notified_h0 INTEGER DEFAULT 0,
     notes TEXT,
+    access_token TEXT,
     created_at TEXT
 );
 
@@ -131,6 +132,19 @@ CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);
 try {
     db.exec('ALTER TABLE invoices ADD COLUMN access_token TEXT;');
 } catch (_) {}
+
+// View terpadu untuk kalkulasi saldo cicilan dan sisa tagihan (Data Access Abstraction)
+db.exec(`
+CREATE VIEW IF NOT EXISTS v_invoice_balances AS
+SELECT 
+    i.*,
+    COALESCE(SUM(p.amount), 0) AS paid_amount,
+    MAX(i.amount - COALESCE(SUM(p.amount), 0), 0) AS remaining_amount,
+    COUNT(p.id) AS payment_count
+FROM invoices i
+LEFT JOIN invoice_payments p ON p.invoice_id = i.id
+GROUP BY i.id;
+`);
 
 function getSettings() {
     const rows = db.prepare('SELECT key, value FROM settings').all();

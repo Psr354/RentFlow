@@ -5,8 +5,8 @@ import os
 import paramiko
 from datetime import datetime
 
-SSH_HOST = os.getenv("SSH_HOST", "192.168.151.152")
-SSH_USER = os.getenv("SSH_USER", "teamskip")
+SSH_HOST = os.getenv("SSH_HOST", "127.0.0.1")
+SSH_USER = os.getenv("SSH_USER", "postgres")
 SSH_PASS = os.getenv("SSH_PASS", "")
 
 TARGET_DBS = [

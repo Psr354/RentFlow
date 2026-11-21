@@ -12,7 +12,8 @@ services:
       - APP_USER=${APP_USER:-admin}
       - APP_PASS=${APP_PASS:-nekyuyun2026}
       - WA_WEBHOOK_SECRET=${WA_WEBHOOK_SECRET:-}
-      - TRUST_PROXY=${TRUST_PROXY:-1}
+      - TRUST_PROXY=${TRUST_PROXY:-0}
+      - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-}
       - DATA_DIR=/app/data
     volumes:
       - ./data:/app/data

@@ -15,7 +15,8 @@ const {
     send,
     readBody,
     parseJsonBody,
-    serveStaticFile
+    serveStaticFile,
+    constantTimeCompare
 } = require('../utils/security');
 const {
     getTodayWIB,
@@ -47,12 +48,6 @@ const {
     runReminderCheck
 } = require('../services/scheduler');
 
-function constantTimeCompare(a, b) {
-    if (typeof a !== 'string' || typeof b !== 'string') return false;
-    const hashA = crypto.createHash('sha256').update(a).digest();
-    const hashB = crypto.createHash('sha256').update(b).digest();
-    return crypto.timingSafeEqual(hashA, hashB);
-}
 
 const ALLOWED_SETTING_KEYS = new Set([
     'app_name',
@@ -152,6 +147,14 @@ async function handleRequest(req, res) {
             }
         }
 
+        // Kontrol akses berkas bukti keluhan penghuni (complaint_*)
+        if (filename.startsWith('complaint_')) {
+            if (!isAuthed(req, 'admin')) {
+                res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                return res.end(JSON.stringify({ success: false, message: 'Akses foto keluhan memerlukan otorisasi administrator.' }));
+            }
+        }
+
         res.setHeader('X-Content-Type-Options', 'nosniff');
         return serveStaticFile(res, targetPath, mime);
     }
@@ -224,14 +227,12 @@ async function handleRequest(req, res) {
             const isAuthorized = isAuthed(req);
             const hasValidToken = Boolean(invoice.access_token && reqToken && constantTimeCompare(reqToken, invoice.access_token));
 
-            // Lindungi privasi penghuni jika diakses tanpa token akses resmi
+            // Wajibkan token tagihan yang valid atau sesi administrator resmi
             if (!isAuthorized && !hasValidToken) {
-                if (invoice.tenant_name) {
-                    const parts = invoice.tenant_name.trim().split(' ');
-                    invoice.tenant_name = parts[0] + (parts.length > 1 ? ' ***' : '');
-                }
-                invoice.notes = null;
-                invoice.payment_proof = null;
+                return send(res, 403, {
+                    success: false,
+                    message: 'Akses ditolak: Tautan tagihan memerlukan token akses resmi.'
+                });
             }
 
             // Jangan sertakan nomor HP dan email privat penghuni pada respon publik
@@ -246,14 +247,6 @@ async function handleRequest(req, res) {
             invoice.months_label = formatMonthsDisplay(monthsList);
 
             const payments = db.prepare('SELECT id, invoice_id, amount, payment_method, payment_date, notes, created_at FROM invoice_payments WHERE invoice_id = ? ORDER BY payment_date ASC, created_at ASC').all(invoiceId);
-
-            // Lindungi privasi rincian catatan cicilan jika diakses tanpa token akses resmi
-            if (!isAuthorized && !hasValidToken) {
-                for (const p of payments) {
-                    p.notes = null;
-                    p.payment_proof = null;
-                }
-            }
 
             const rawSettings = getSettings();
             const publicSettings = {
@@ -1308,13 +1301,26 @@ async function handleRequest(req, res) {
             year: query.year
         });
 
+        function sanitizeCsvCell(value) {
+            const str = String(value ?? '');
+            const trimmed = str.trimStart();
+            const escaped = str.replace(/"/g, '""');
+            if (/^[=\+\-@\t\r]/.test(trimmed)) {
+                return `'\t${escaped}`;
+            }
+            return escaped;
+        }
+
         let csv = '\uFEFF"ID Transaksi","Tanggal","Tipe","Kategori","Nominal","Deskripsi","Saldo Berjalan"\r\n';
         for (const t of transactions) {
-            const idEsc = String(t.id).replace(/"/g, '""');
+            const idEsc = sanitizeCsvCell(t.id);
+            const dateEsc = sanitizeCsvCell(t.date);
             const typeLabel = t.type === 'masuk' ? 'PEMASUKAN' : 'PENGELUARAN';
-            const catEsc = String(t.category || '-').replace(/"/g, '""');
-            const descEsc = String(t.description || '-').replace(/"/g, '""');
-            csv += `"${idEsc}","${t.date}","${typeLabel}","${catEsc}",${t.amount},"${descEsc}",${t.running_balance}\r\n`;
+            const catEsc = sanitizeCsvCell(t.category || '-');
+            const descEsc = sanitizeCsvCell(t.description || '-');
+            const amountVal = Number(t.amount) || 0;
+            const balanceVal = Number(t.running_balance) || 0;
+            csv += `"${idEsc}","${dateEsc}","${typeLabel}","${catEsc}",${amountVal},"${descEsc}",${balanceVal}\r\n`;
         }
 
         const filename = query.month 

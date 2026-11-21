@@ -59,30 +59,15 @@ function getClientIp(req) {
     if (trustProxy && req.headers) {
         let isTrusted = false;
         if (process.env.TRUSTED_PROXY_IPS) {
-            const list = process.env.TRUSTED_PROXY_IPS.split(',').map(s => s.trim());
+            const list = process.env.TRUSTED_PROXY_IPS.split(',').map(s => s.trim()).filter(Boolean);
             isTrusted = list.includes(remote);
         } else {
+            // Jika TRUSTED_PROXY_IPS tidak didefinisikan secara eksplisit,
+            // hanya percayai loopback lokal (127.0.0.1, ::1) untuk mencegah bypass rate-limit
+            // melalui gateway bridge Docker (misal 172.17.0.1) saat port dipublish ke publik.
             isTrusted = remote === '127.0.0.1' ||
                 remote === '::1' ||
-                remote === '::ffff:127.0.0.1' ||
-                remote.startsWith('10.') ||
-                remote.startsWith('172.16.') ||
-                remote.startsWith('172.17.') ||
-                remote.startsWith('172.18.') ||
-                remote.startsWith('172.19.') ||
-                remote.startsWith('172.20.') ||
-                remote.startsWith('172.21.') ||
-                remote.startsWith('172.22.') ||
-                remote.startsWith('172.23.') ||
-                remote.startsWith('172.24.') ||
-                remote.startsWith('172.25.') ||
-                remote.startsWith('172.26.') ||
-                remote.startsWith('172.27.') ||
-                remote.startsWith('172.28.') ||
-                remote.startsWith('172.29.') ||
-                remote.startsWith('172.30.') ||
-                remote.startsWith('172.31.') ||
-                remote.startsWith('192.168.');
+                remote === '::ffff:127.0.0.1';
         }
 
         if (isTrusted) {
