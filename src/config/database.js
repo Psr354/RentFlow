@@ -138,12 +138,6 @@ CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
 CREATE INDEX IF NOT EXISTS idx_complaints_room_id ON complaints(room_id);
 CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);
-CREATE INDEX IF NOT EXISTS idx_rooms_deleted_at ON rooms(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_invoices_deleted_at ON invoices(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_invoice_payments_deleted_at ON invoice_payments(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_expenses_deleted_at ON expenses(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_general_incomes_deleted_at ON general_incomes(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_complaints_deleted_at ON complaints(deleted_at);
 `);
 
 // Migrasi penambahan kolom dan indeks untuk database lama
