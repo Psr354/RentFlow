@@ -51,6 +51,7 @@ function getUnifiedTransactions(filters = {}) {
         FROM invoice_payments p
         JOIN invoices i ON p.invoice_id = i.id
         JOIN rooms r ON i.room_id = r.id
+        WHERE p.deleted_at IS NULL AND i.deleted_at IS NULL AND r.deleted_at IS NULL
         UNION ALL
         SELECT 
             i.id,
@@ -61,7 +62,7 @@ function getUnifiedTransactions(filters = {}) {
             'Sewa' as category
         FROM invoices i
         JOIN rooms r ON i.room_id = r.id
-        WHERE i.status = 'LUNAS' AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = i.id)
+        WHERE i.status = 'LUNAS' AND i.deleted_at IS NULL AND r.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = i.id AND ip.deleted_at IS NULL)
         UNION ALL
         SELECT 
             g.id,
@@ -71,6 +72,7 @@ function getUnifiedTransactions(filters = {}) {
             ('Pemasukan: ' || COALESCE(g.note, g.category)) as description,
             g.category
         FROM general_incomes g
+        WHERE g.deleted_at IS NULL
         UNION ALL
         SELECT 
             e.id,
@@ -80,6 +82,7 @@ function getUnifiedTransactions(filters = {}) {
             (e.category || ': ' || COALESCE(e.note, '-')) as description,
             e.category
         FROM expenses e
+        WHERE e.deleted_at IS NULL
     ),
     with_running AS (
         SELECT 
@@ -97,22 +100,22 @@ function getUnifiedTransactions(filters = {}) {
 
     const totalCount = db.prepare(`
         SELECT count(*) as c FROM (
-            SELECT id FROM invoice_payments 
+            SELECT id FROM invoice_payments WHERE deleted_at IS NULL
             UNION ALL 
-            SELECT id FROM invoices WHERE status = 'LUNAS' AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = invoices.id) 
+            SELECT id FROM invoices WHERE status = 'LUNAS' AND deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = invoices.id AND ip.deleted_at IS NULL) 
             UNION ALL 
-            SELECT id FROM general_incomes 
+            SELECT id FROM general_incomes WHERE deleted_at IS NULL
             UNION ALL 
-            SELECT id FROM expenses
+            SELECT id FROM expenses WHERE deleted_at IS NULL
         )
     `).get().c;
 
     const currentBalance = db.prepare(`
         SELECT COALESCE(
-            (SELECT COALESCE(SUM(amount), 0) FROM invoice_payments) +
-            (SELECT COALESCE(SUM(amount), 0) FROM invoices WHERE status = 'LUNAS' AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = invoices.id)) +
-            (SELECT COALESCE(SUM(amount), 0) FROM general_incomes) -
-            (SELECT COALESCE(SUM(amount), 0) FROM expenses),
+            (SELECT COALESCE(SUM(amount), 0) FROM invoice_payments WHERE deleted_at IS NULL) +
+            (SELECT COALESCE(SUM(amount), 0) FROM invoices WHERE status = 'LUNAS' AND deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = invoices.id AND ip.deleted_at IS NULL)) +
+            (SELECT COALESCE(SUM(amount), 0) FROM general_incomes WHERE deleted_at IS NULL) -
+            (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE deleted_at IS NULL),
         0) as bal
     `).get().bal;
 

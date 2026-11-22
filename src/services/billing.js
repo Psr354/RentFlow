@@ -6,7 +6,7 @@ function recalculateInvoiceStatus(invoiceId, clearVerification = false) {
     const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
     if (!invoice) return null;
 
-    const payments = db.prepare('SELECT * FROM invoice_payments WHERE invoice_id = ? ORDER BY payment_date ASC').all(invoiceId);
+    const payments = db.prepare('SELECT * FROM invoice_payments WHERE invoice_id = ? AND deleted_at IS NULL ORDER BY payment_date ASC').all(invoiceId);
     const paid = payments.reduce((acc, p) => acc + p.amount, 0);
 
     // Proteksi: Jika tidak ada baris cicilan di invoice_payments tetapi invoice sudah berstatus LUNAS, pertahankan status LUNAS
@@ -49,63 +49,65 @@ function recalculateInvoiceStatus(invoiceId, clearVerification = false) {
 }
 
 function allocatePaymentFIFO({ roomId, amount, paymentMethod = 'TRANSFER', paymentDate = null, notes = '', targetInvoiceId = null }) {
-    const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId);
-    if (!room) {
-        return { success: false, message: 'Data unit kontrakan tidak ditemukan' };
-    }
-
-    // Ambil seluruh tagihan yang belum lunas untuk unit ini, urutkan dari yang paling lama jatuh tempo
-    let unpaidInvoices = db.prepare(`
-        SELECT i.*,
-               COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount,
-               MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0), 0) as remaining_amount
-        FROM invoices i
-        WHERE i.room_id = ? AND i.status != 'LUNAS'
-        ORDER BY i.due_date ASC, i.created_at ASC
-    `).all(roomId);
-
-    if (unpaidInvoices.length === 0) {
-        return {
-            success: false,
-            message: `Unit ${room.number} (${room.tenant_name || '-'}) tidak memiliki tagihan tertunggak.`
-        };
-    }
-
-    // Jika ada targetInvoiceId spesifik, prioritaskan di urutan pertama
-    if (targetInvoiceId) {
-        const targetIdx = unpaidInvoices.findIndex(i => i.id === targetInvoiceId);
-        if (targetIdx > 0) {
-            const targetInv = unpaidInvoices.splice(targetIdx, 1)[0];
-            unpaidInvoices.unshift(targetInv);
+    db.exec('BEGIN IMMEDIATE;');
+    try {
+        const room = db.prepare('SELECT * FROM rooms WHERE id = ? AND deleted_at IS NULL').get(roomId);
+        if (!room) {
+            db.exec('ROLLBACK;');
+            return { success: false, message: 'Data unit kontrakan tidak ditemukan' };
         }
-    }
 
-    const payDate = paymentDate || getTodayWIB();
-    const payMethod = paymentMethod || 'TRANSFER';
+        // Ambil seluruh tagihan yang belum lunas untuk unit ini, urutkan dari yang paling lama jatuh tempo
+        let unpaidInvoices = db.prepare(`
+            SELECT i.*,
+                   COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0) as paid_amount,
+                   MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0), 0) as remaining_amount
+            FROM invoices i
+            WHERE i.room_id = ? AND i.status != 'LUNAS' AND i.deleted_at IS NULL
+            ORDER BY i.due_date ASC, i.created_at ASC
+        `).all(roomId);
 
-    let remainingToAllocate = Number(amount);
-    if (isNaN(remainingToAllocate) || remainingToAllocate <= 0) {
+        if (unpaidInvoices.length === 0) {
+            db.exec('ROLLBACK;');
+            return {
+                success: false,
+                message: `Unit ${room.number} (${room.tenant_name || '-'}) tidak memiliki tagihan tertunggak.`
+            };
+        }
+
+        // Jika ada targetInvoiceId spesifik, prioritaskan di urutan pertama
         if (targetInvoiceId) {
-            const targetInv = unpaidInvoices.find(i => i.id === targetInvoiceId);
-            if (targetInv && targetInv.remaining_amount > 0) {
-                remainingToAllocate = targetInv.remaining_amount;
+            const targetIdx = unpaidInvoices.findIndex(i => i.id === targetInvoiceId);
+            if (targetIdx > 0) {
+                const targetInv = unpaidInvoices.splice(targetIdx, 1)[0];
+                unpaidInvoices.unshift(targetInv);
+            }
+        }
+
+        const payDate = paymentDate || getTodayWIB();
+        const payMethod = paymentMethod || 'TRANSFER';
+
+        let remainingToAllocate = Number(amount);
+        if (isNaN(remainingToAllocate) || remainingToAllocate <= 0) {
+            if (targetInvoiceId) {
+                const targetInv = unpaidInvoices.find(i => i.id === targetInvoiceId);
+                if (targetInv && targetInv.remaining_amount > 0) {
+                    remainingToAllocate = targetInv.remaining_amount;
+                } else {
+                    remainingToAllocate = unpaidInvoices[0].remaining_amount;
+                }
             } else {
                 remainingToAllocate = unpaidInvoices[0].remaining_amount;
             }
-        } else {
-            remainingToAllocate = unpaidInvoices[0].remaining_amount;
         }
-    }
 
-    const totalOutstanding = unpaidInvoices.reduce((acc, inv) => acc + inv.remaining_amount, 0);
-    const totalAllocated = Math.min(remainingToAllocate, totalOutstanding);
-    let pool = totalAllocated;
+        const totalOutstanding = unpaidInvoices.reduce((acc, inv) => acc + inv.remaining_amount, 0);
+        const totalAllocated = Math.min(remainingToAllocate, totalOutstanding);
+        let pool = totalAllocated;
 
-    const allocations = [];
-    const timestamp = new Date().toISOString();
+        const allocations = [];
+        const timestamp = new Date().toISOString();
 
-    db.exec('BEGIN IMMEDIATE;');
-    try {
         for (let idx = 0; idx < unpaidInvoices.length; idx++) {
             if (pool <= 0) break;
             const inv = unpaidInvoices[idx];
@@ -159,45 +161,44 @@ function allocatePaymentFIFO({ roomId, amount, paymentMethod = 'TRANSFER', payme
         }
 
         db.exec('COMMIT;');
+
+        let message = '';
+        if (allocations.length === 1) {
+            const a = allocations[0];
+            if (a.new_status === 'LUNAS') {
+                message = `Tagihan ${room.number} periode ${a.month_year} berhasil dilunasi penuh (Rp ${a.allocated_amount.toLocaleString('id-ID')}). Status: LUNAS.`;
+            } else {
+                message = `Pembayaran cicilan Rp ${a.allocated_amount.toLocaleString('id-ID')} dicatat untuk unit ${room.number} periode ${a.month_year}. Sisa tagihan: Rp ${a.remaining_amount.toLocaleString('id-ID')}. Status: SEBAGIAN.`;
+            }
+        } else {
+            const details = allocations.map(a => 
+                `• ${a.month_year}: Masuk Rp ${a.allocated_amount.toLocaleString('id-ID')} -> ${a.new_status === 'LUNAS' ? 'LUNAS' : `Sisa Rp ${a.remaining_amount.toLocaleString('id-ID')}`}`
+            );
+            message = `Pembayaran total Rp ${totalAllocated.toLocaleString('id-ID')} untuk Unit ${room.number} berhasil dialokasikan secara FIFO ke ${allocations.length} periode:\n` + details.join('\n');
+        }
+
+        if (excess > 0) {
+            message += `\n(Catatan: Terdapat kelebihan dana Rp ${excess.toLocaleString('id-ID')} yang otomatis dicatat ke Kas Pemasukan Titipan Sewa).`;
+        }
+
+        return {
+            success: true,
+            message,
+            room_number: room.number,
+            tenant_name: room.tenant_name,
+            total_allocated: totalAllocated,
+            excess_amount: excess,
+            allocations
+        };
     } catch (err) {
         db.exec('ROLLBACK;');
         throw err;
     }
-
-    let message = '';
-    if (allocations.length === 1) {
-        const a = allocations[0];
-        if (a.new_status === 'LUNAS') {
-            message = `Tagihan ${room.number} periode ${a.month_year} berhasil dilunasi penuh (Rp ${a.allocated_amount.toLocaleString('id-ID')}). Status: LUNAS.`;
-        } else {
-            message = `Pembayaran cicilan Rp ${a.allocated_amount.toLocaleString('id-ID')} dicatat untuk unit ${room.number} periode ${a.month_year}. Sisa tagihan: Rp ${a.remaining_amount.toLocaleString('id-ID')}. Status: SEBAGIAN.`;
-        }
-    } else {
-        const details = allocations.map(a => 
-            `• ${a.month_year}: Masuk Rp ${a.allocated_amount.toLocaleString('id-ID')} -> ${a.new_status === 'LUNAS' ? 'LUNAS' : `Sisa Rp ${a.remaining_amount.toLocaleString('id-ID')}`}`
-        );
-        message = `Pembayaran total Rp ${totalAllocated.toLocaleString('id-ID')} untuk Unit ${room.number} berhasil dialokasikan secara FIFO ke ${allocations.length} periode:\n` + details.join('\n');
-    }
-
-    const excess = remainingToAllocate - totalAllocated;
-    if (excess > 0) {
-        message += `\n(Catatan: Terdapat kelebihan dana Rp ${excess.toLocaleString('id-ID')} yang otomatis dicatat ke Kas Pemasukan Titipan Sewa).`;
-    }
-
-    return {
-        success: true,
-        message,
-        room_number: room.number,
-        tenant_name: room.tenant_name,
-        total_allocated: totalAllocated,
-        excess_amount: excess,
-        allocations
-    };
 }
 
 function findTargetInvoiceForRoom(roomId, periodQuery) {
     if (!periodQuery) return null;
-    const unpaid = db.prepare('SELECT * FROM invoices WHERE room_id = ? AND status != \'LUNAS\' ORDER BY due_date ASC').all(roomId);
+    const unpaid = db.prepare('SELECT * FROM invoices WHERE room_id = ? AND status != \'LUNAS\' AND deleted_at IS NULL ORDER BY due_date ASC').all(roomId);
     const q = periodQuery.toLowerCase().trim();
 
     for (const inv of unpaid) {
@@ -226,7 +227,7 @@ function findTargetInvoiceForRoom(roomId, periodQuery) {
 
 function findPaidInvoiceForRoom(roomId, periodQuery) {
     if (!periodQuery) return null;
-    const paid = db.prepare('SELECT * FROM invoices WHERE room_id = ? AND status = \'LUNAS\' ORDER BY due_date DESC').all(roomId);
+    const paid = db.prepare('SELECT * FROM invoices WHERE room_id = ? AND status = \'LUNAS\' AND deleted_at IS NULL ORDER BY due_date DESC').all(roomId);
     const q = periodQuery.toLowerCase().trim();
 
     for (const inv of paid) {
@@ -259,7 +260,7 @@ function generateMonthlyInvoices(targetMonthYear = null, targetDueYm = null) {
     const mIdx = parseInt(mStr, 10) - 1;
     const monthYear = targetMonthYear || `${MONTH_NAMES_ID[mIdx] || mStr} ${yStr}`;
 
-    const occupiedRooms = db.prepare("SELECT * FROM rooms WHERE status = 'TERISI'").all();
+    const occupiedRooms = db.prepare("SELECT * FROM rooms WHERE status = 'TERISI' AND deleted_at IS NULL").all();
     if (occupiedRooms.length === 0) {
         return { success: false, count: 0, message: 'Tidak ada unit berstatus TERISI saat ini' };
     }
@@ -270,7 +271,7 @@ function generateMonthlyInvoices(targetMonthYear = null, targetDueYm = null) {
         VALUES (?, ?, ?, ?, ?, 'BELUM_BAYAR', ?, ?)
     `);
 
-    const existsStmt = db.prepare('SELECT id FROM invoices WHERE room_id = ? AND month_year = ?');
+    const existsStmt = db.prepare('SELECT id FROM invoices WHERE room_id = ? AND month_year = ? AND deleted_at IS NULL');
 
     db.exec('BEGIN IMMEDIATE;');
     try {

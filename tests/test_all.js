@@ -412,29 +412,33 @@ async function testTraceFundCommands() {
                 assert.strictEqual(checkPay.amount, 1500000);
                 assert.strictEqual(checkPay.notes, 'Cicilan 1 direvisi');
 
-                // DELETE Payment
+                // DELETE Payment (Soft Delete)
                 const delPay = await makeRequest(port, 'DELETE', `/api/invoices/${testInvId}/payments/${paymentId}`);
                 assert.strictEqual(delPay.statusCode, 200);
-                const checkPayAfterDel = appDb.prepare('SELECT * FROM invoice_payments WHERE id = ?').get(paymentId);
+                const checkPayAfterDel = appDb.prepare('SELECT * FROM invoice_payments WHERE id = ? AND deleted_at IS NULL').get(paymentId);
                 assert.strictEqual(checkPayAfterDel, undefined);
+                const checkPayRaw = appDb.prepare('SELECT * FROM invoice_payments WHERE id = ?').get(paymentId);
+                assert(checkPayRaw && checkPayRaw.deleted_at !== null, 'deleted_at payment harus terisi');
 
-                // Test DELETE All Payments for an invoice
+                // Test DELETE All Payments for an invoice (Soft Delete)
                 await makeRequest(port, 'POST', `/api/invoices/${testInvId}/pay`, { amount: 500000, notes: 'Cicilan A' });
                 await makeRequest(port, 'POST', `/api/invoices/${testInvId}/pay`, { amount: 500000, notes: 'Cicilan B' });
-                const countBeforeDelAll = appDb.prepare('SELECT COUNT(*) as c FROM invoice_payments WHERE invoice_id = ?').get(testInvId).c;
+                const countBeforeDelAll = appDb.prepare('SELECT COUNT(*) as c FROM invoice_payments WHERE invoice_id = ? AND deleted_at IS NULL').get(testInvId).c;
                 assert.strictEqual(countBeforeDelAll, 2);
 
                 const delAllPay = await makeRequest(port, 'DELETE', `/api/invoices/${testInvId}/payments`);
                 assert.strictEqual(delAllPay.statusCode, 200);
                 assert.strictEqual(delAllPay.body.success, true);
-                const countAfterDelAll = appDb.prepare('SELECT COUNT(*) as c FROM invoice_payments WHERE invoice_id = ?').get(testInvId).c;
+                const countAfterDelAll = appDb.prepare('SELECT COUNT(*) as c FROM invoice_payments WHERE invoice_id = ? AND deleted_at IS NULL').get(testInvId).c;
                 assert.strictEqual(countAfterDelAll, 0);
                 const checkInvAfterDelAll = appDb.prepare('SELECT * FROM invoices WHERE id = ?').get(testInvId);
                 assert.strictEqual(checkInvAfterDelAll.status, 'BELUM_BAYAR');
 
-                // DELETE Invoice
+                // DELETE Invoice (Soft Delete)
                 const delInv = await makeRequest(port, 'DELETE', `/api/invoices/${testInvId}`);
                 assert.strictEqual(delInv.statusCode, 200);
+                const checkInvAfterDel = appDb.prepare('SELECT * FROM invoices WHERE id = ? AND deleted_at IS NULL').get(testInvId);
+                assert.strictEqual(checkInvAfterDel, undefined);
 
                 // 11.2b Test Preservasi Status Tagihan Legacy Lunas saat Diedit
                 const testLegacyInvId = 'test-legacy-lunas';
@@ -454,9 +458,11 @@ async function testTraceFundCommands() {
 
                 await makeRequest(port, 'DELETE', `/api/invoices/${testLegacyInvId}`);
 
-                // DELETE Room
+                // DELETE Room (Soft Delete)
                 const delRoom = await makeRequest(port, 'DELETE', `/api/rooms/${testRoomId}`);
                 assert.strictEqual(delRoom.statusCode, 200);
+                const checkRoomAfterDel = appDb.prepare('SELECT * FROM rooms WHERE id = ? AND deleted_at IS NULL').get(testRoomId);
+                assert.strictEqual(checkRoomAfterDel, undefined);
 
                 // 11.3 Expenses CRUD
                 const testExpId = 'test-exp-crud';
@@ -474,12 +480,14 @@ async function testTraceFundCommands() {
                     note: 'Token pompa tes revisi'
                 });
                 assert.strictEqual(putExp.statusCode, 200);
-                const checkExp = appDb.prepare('SELECT * FROM expenses WHERE id = ?').get(testExpId);
+                const checkExp = appDb.prepare('SELECT * FROM expenses WHERE id = ? AND deleted_at IS NULL').get(testExpId);
                 assert.strictEqual(checkExp.amount, 125000);
                 assert.strictEqual(checkExp.note, 'Token pompa tes revisi');
 
                 const delExp = await makeRequest(port, 'DELETE', `/api/expenses/${testExpId}`);
                 assert.strictEqual(delExp.statusCode, 200);
+                const checkExpAfterDel = appDb.prepare('SELECT * FROM expenses WHERE id = ? AND deleted_at IS NULL').get(testExpId);
+                assert.strictEqual(checkExpAfterDel, undefined);
 
                 // 11.4 General Incomes CRUD
                 const testIncId = 'test-inc-crud';
@@ -497,12 +505,14 @@ async function testTraceFundCommands() {
                     note: 'Penjualan besi & kardus bekas'
                 });
                 assert.strictEqual(putInc.statusCode, 200);
-                const checkInc = appDb.prepare('SELECT * FROM general_incomes WHERE id = ?').get(testIncId);
+                const checkInc = appDb.prepare('SELECT * FROM general_incomes WHERE id = ? AND deleted_at IS NULL').get(testIncId);
                 assert.strictEqual(checkInc.amount, 350000);
                 assert.strictEqual(checkInc.note, 'Penjualan besi & kardus bekas');
 
                 const delInc = await makeRequest(port, 'DELETE', `/api/incomes/${testIncId}`);
                 assert.strictEqual(delInc.statusCode, 200);
+                const checkIncAfterDel = appDb.prepare('SELECT * FROM general_incomes WHERE id = ? AND deleted_at IS NULL').get(testIncId);
+                assert.strictEqual(checkIncAfterDel, undefined);
 
                 // 11.5 Budgets CRUD
                 const testBudMonth = '2099-01';
@@ -521,7 +531,7 @@ async function testTraceFundCommands() {
                 const checkBud = appDb.prepare('SELECT * FROM budgets WHERE month = ?').get(testBudMonth);
                 assert.strictEqual(checkBud, undefined);
 
-                // 11.6 Complaints CRUD
+                // 11.6 Complaints CRUD & Soft Delete / Trash / Restore / Purge Testing
                 const testCmpId = 'test-cmp-crud';
                 const postCmp = await makeRequest(port, 'POST', '/api/complaints', {
                     id: testCmpId,
@@ -539,18 +549,38 @@ async function testTraceFundCommands() {
                     admin_notes: 'Tukang sedang menuju lokasi'
                 });
                 assert.strictEqual(putCmp.statusCode, 200);
-                const checkCmp = appDb.prepare('SELECT * FROM complaints WHERE id = ?').get(testCmpId);
+                const checkCmp = appDb.prepare('SELECT * FROM complaints WHERE id = ? AND deleted_at IS NULL').get(testCmpId);
                 assert.strictEqual(checkCmp.status, 'DIPROSES');
                 assert.strictEqual(checkCmp.admin_notes, 'Tukang sedang menuju lokasi');
 
+                // Soft Delete Complaint
                 const delCmp = await makeRequest(port, 'DELETE', `/api/complaints/${testCmpId}`);
                 assert.strictEqual(delCmp.statusCode, 200);
-                const checkCmpAfterDel = appDb.prepare('SELECT * FROM complaints WHERE id = ?').get(testCmpId);
-                assert.strictEqual(checkCmpAfterDel, undefined);
+                const checkCmpAfterDel = appDb.prepare('SELECT * FROM complaints WHERE id = ? AND deleted_at IS NULL').get(testCmpId);
+                assert.strictEqual(checkCmpAfterDel, undefined, 'Keluhan aktif harus disembunyikan setelah soft delete');
+
+                // Verifikasi Tempat Sampah (GET /api/trash)
+                const trashRes = await makeRequest(port, 'GET', '/api/trash');
+                assert.strictEqual(trashRes.statusCode, 200);
+                assert(trashRes.body.totalCount > 0, 'Total item di tempat sampah harus lebih dari 0');
+                assert(trashRes.body.data.complaints.some(c => c.id === testCmpId), 'Keluhan yang di-soft-delete harus muncul di tempat sampah');
+
+                // Verifikasi Pemulihan (POST /api/trash/restore)
+                const restoreRes = await makeRequest(port, 'POST', '/api/trash/restore', { type: 'complaints', id: testCmpId });
+                assert.strictEqual(restoreRes.statusCode, 200);
+                const checkCmpRestored = appDb.prepare('SELECT * FROM complaints WHERE id = ? AND deleted_at IS NULL').get(testCmpId);
+                assert(checkCmpRestored !== undefined, 'Keluhan yang dipulihkan harus aktif kembali');
+
+                // Verifikasi Hapus Permanen (POST /api/trash/purge)
+                await makeRequest(port, 'DELETE', `/api/complaints/${testCmpId}`); // Soft delete ulang
+                const purgeRes = await makeRequest(port, 'POST', '/api/trash/purge', { type: 'complaints', id: testCmpId });
+                assert.strictEqual(purgeRes.statusCode, 200);
+                const checkCmpPurged = appDb.prepare('SELECT * FROM complaints WHERE id = ?').get(testCmpId);
+                assert.strictEqual(checkCmpPurged, undefined, 'Keluhan yang di-purge harus terhapus permanen dari basis data');
 
                 // 11.7 Pengujian Proteksi Token Konfirmasi Tagihan Publik
                 const testSecInvId = 'test-sec-inv';
-                let validRoom = appDb.prepare('SELECT id FROM rooms LIMIT 1').get();
+                let validRoom = appDb.prepare('SELECT id FROM rooms WHERE deleted_at IS NULL LIMIT 1').get();
                 if (!validRoom) {
                     appDb.prepare("INSERT INTO rooms (id, number, status) VALUES ('room-sec-test', '99.X', 'TERISI')").run();
                     validRoom = { id: 'room-sec-test' };
@@ -692,6 +722,28 @@ async function testTraceFundCommands() {
                 assert.strictEqual(resLoginOk.statusCode, 200, 'Kredensial benar harus berhasil masuk dengan status 200');
                 assert(typeof resLoginOk.body.token === 'string', 'Login harus mengembalikan token otentikasi');
                 const adminToken = resLoginOk.body.token;
+
+                // 11.17b Pengujian Pencabutan Token Logout
+                const resTempLogin = await makeRequest(port, 'POST', '/api/login', {
+                    username: APP_USER,
+                    password: APP_PASS
+                }, { 'Content-Type': 'application/json' });
+                const tempToken = resTempLogin.body.token;
+                const resLogout = await makeRequest(port, 'POST', '/api/logout', null, {
+                    'Authorization': `Bearer ${tempToken}`
+                });
+                assert.strictEqual(resLogout.statusCode, 200, 'Logout harus berhasil');
+                const resAfterLogout = await makeRequest(port, 'GET', '/api/rooms', null, {
+                    'Authorization': `Bearer ${tempToken}`
+                });
+                assert.strictEqual(resAfterLogout.statusCode, 401, 'Token yang sudah di-logout HARUS ditolak dengan 401');
+
+                // 11.17c Pengujian Validasi Input Buruk (Bad Request 400)
+                const resBadRoom = await makeRequest(port, 'POST', '/api/rooms', {
+                    number: '',
+                    price: -50000
+                }, { 'Authorization': `Bearer ${adminToken}` });
+                assert.strictEqual(resBadRoom.statusCode, 400, 'Data kamar tanpa nomor harus ditolak 400 Bad Request');
 
                 // 11.18 Pengujian Strict CORS Origin Whitelisting
                 const resCorsAttacker = await makeRequest(port, 'GET', '/api/rooms', null, {

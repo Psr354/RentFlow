@@ -121,6 +121,11 @@
                         <button onclick="navigateTab('settings')" id="mnav-settings" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800 hover:text-white transition">
                             <i data-lucide="settings" class="w-4 h-4"></i> Pengaturan & Notifikasi
                         </button>
+                        <button onclick="navigateTab('trash')" id="mnav-trash" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800 hover:text-white transition">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            <span>Tempat Sampah</span>
+                            <span id="mbadge-trash" class="hidden ml-auto px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">0</span>
+                        </button>
                     </nav>
                 </div>
 
@@ -179,6 +184,11 @@
                     </button>
                     <button onclick="navigateTab('settings')" id="nav-settings" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800 hover:text-white transition">
                         <i data-lucide="settings" class="w-4 h-4"></i> Pengaturan & Notifikasi
+                    </button>
+                    <button onclick="navigateTab('trash')" id="nav-trash" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800 hover:text-white transition">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        <span>Tempat Sampah</span>
+                        <span id="badge-trash" class="hidden ml-auto px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">0</span>
                     </button>
                 </nav>
             </div>
@@ -1011,6 +1021,71 @@
                             </div>
 
                         </form>
+                    </div>
+                </div>
+
+                <!-- TAB 7: TEMPAT SAMPAH -->
+                <div id="view-trash" class="hidden space-y-6">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-100">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                                    <i data-lucide="trash-2" class="w-5 h-5 text-rose-500"></i>
+                                    <span>Tempat Sampah (Data Dihapus Sementara)</span>
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-0.5">Seluruh data yang dihapus dapat dipulihkan kembali atau dibersihkan permanen.</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="loadTrashData()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Segarkan
+                                </button>
+                                <button type="button" onclick="purgeAllTrash()" class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-rose-200 transition">
+                                    <i data-lucide="trash" class="w-3.5 h-3.5"></i> Kosongkan Tempat Sampah
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Trash Category Filter Tabs -->
+                        <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+                            <button onclick="setTrashFilter('all')" id="trash-filter-all" class="px-3.5 py-1.5 rounded-xl font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">
+                                Semua (<span id="trash-count-all">0</span>)
+                            </button>
+                            <button onclick="setTrashFilter('rooms')" id="trash-filter-rooms" class="px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition whitespace-nowrap">
+                                Unit (<span id="trash-count-rooms">0</span>)
+                            </button>
+                            <button onclick="setTrashFilter('invoices')" id="trash-filter-invoices" class="px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition whitespace-nowrap">
+                                Tagihan (<span id="trash-count-invoices">0</span>)
+                            </button>
+                            <button onclick="setTrashFilter('expenses')" id="trash-filter-expenses" class="px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition whitespace-nowrap">
+                                Pengeluaran (<span id="trash-count-expenses">0</span>)
+                            </button>
+                            <button onclick="setTrashFilter('incomes')" id="trash-filter-incomes" class="px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition whitespace-nowrap">
+                                Pemasukan Kas (<span id="trash-count-incomes">0</span>)
+                            </button>
+                            <button onclick="setTrashFilter('complaints')" id="trash-filter-complaints" class="px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition whitespace-nowrap">
+                                Keluhan (<span id="trash-count-complaints">0</span>)
+                            </button>
+                            <button onclick="setTrashFilter('payments')" id="trash-filter-payments" class="px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition whitespace-nowrap">
+                                Cicilan (<span id="trash-count-payments">0</span>)
+                            </button>
+                        </div>
+
+                        <!-- Trash Table Container -->
+                        <div class="overflow-x-auto rounded-xl border border-slate-200/80">
+                            <table class="w-full text-left text-xs text-slate-600">
+                                <thead class="bg-slate-50 text-[11px] uppercase tracking-wider font-bold text-slate-700 border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-3.5">Tipe Data</th>
+                                        <th class="p-3.5">Rincian Data</th>
+                                        <th class="p-3.5">Waktu Dihapus</th>
+                                        <th class="p-3.5 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trash-table-body" class="divide-y divide-slate-100">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -1954,7 +2029,13 @@
             }
         }
 
-        function handleLogout() {
+        async function handleLogout() {
+            const token = sessionStorage.getItem('admin_token');
+            if (token) {
+                try {
+                    await fetch('/api/logout', { method: 'POST', headers: authHeaders() });
+                } catch (_) {}
+            }
             sessionStorage.removeItem('admin_token');
             document.getElementById('login-screen').classList.remove('hidden');
             document.getElementById('app-screen').classList.add('hidden');
@@ -1976,7 +2057,7 @@
         function navigateTab(tab) {
             currentTab = tab;
             // Desktop Sidebar Buttons
-            ['dashboard', 'rooms', 'invoices', 'expenses', 'complaints', 'logs', 'settings'].forEach(t => {
+            ['dashboard', 'rooms', 'invoices', 'expenses', 'complaints', 'logs', 'settings', 'trash'].forEach(t => {
                 const navBtn = document.getElementById(`nav-${t}`);
                 const view = document.getElementById(`view-${t}`);
                 if (navBtn && view) {
@@ -1991,7 +2072,7 @@
             });
 
             // Mobile Drawer Buttons
-            ['dashboard', 'rooms', 'invoices', 'expenses', 'complaints', 'logs', 'settings'].forEach(t => {
+            ['dashboard', 'rooms', 'invoices', 'expenses', 'complaints', 'logs', 'settings', 'trash'].forEach(t => {
                 const mbtn = document.getElementById(`mnav-${t}`);
                 if (mbtn) {
                     if (t === tab) {
@@ -2023,13 +2104,15 @@
                 expenses: 'Catatan Pengeluaran & Biaya Operasional',
                 complaints: 'Keluhan & Laporan Perbaikan Unit',
                 logs: 'Log Pengiriman Notifikasi Otomatis',
-                settings: 'Pengaturan Kontrakan, Pembayaran & Notifikasi'
+                settings: 'Pengaturan Kontrakan, Pembayaran & Notifikasi',
+                trash: 'Tempat Sampah & Pemulihan Data'
             };
             document.getElementById('page-title').innerText = titles[tab] || 'Dashboard';
             lucide.createIcons();
 
             if (tab === 'complaints') loadComplaints();
             if (tab === 'logs') loadLogs();
+            if (tab === 'trash') loadTrashData();
             if (tab === 'settings') {
                 checkWaStatus();
                 clearInterval(waPollTimer);
@@ -2073,6 +2156,9 @@
 
                 // 7. TraceFund Engine: Analytics
                 await loadTraceFundDashboard();
+
+                // 8. Trash count badge
+                await updateTrashBadge();
 
             } catch (err) {
                 showToast('Gagal memuat beberapa data dari server', 'danger');
@@ -4862,6 +4948,274 @@
 
         function closeComplaintPhotoModal() {
             document.getElementById('modal-complaint-photo').classList.add('hidden');
+        }
+
+        // ==================== TRASH / TEMPAT SAMPAH ====================
+        let trashData = { rooms: [], invoices: [], expenses: [], incomes: [], complaints: [], payments: [] };
+        let activeTrashFilter = 'all';
+
+        async function updateTrashBadge() {
+            try {
+                const res = await fetch('/api/trash', { headers: authHeaders() });
+                if (!res.ok) return;
+                const d = await res.json();
+                const total = d.totalCount || 0;
+                
+                const bDesktop = document.getElementById('badge-trash');
+                if (bDesktop) {
+                    bDesktop.innerText = total;
+                    if (total > 0) bDesktop.classList.remove('hidden');
+                    else bDesktop.classList.add('hidden');
+                }
+
+                const bMobile = document.getElementById('mbadge-trash');
+                if (bMobile) {
+                    bMobile.innerText = total;
+                    if (total > 0) bMobile.classList.remove('hidden');
+                    else bMobile.classList.add('hidden');
+                }
+            } catch (_) {}
+        }
+
+        async function loadTrashData() {
+            try {
+                const res = await fetch('/api/trash', { headers: authHeaders() });
+                if (res.status === 401) { handleLogout(); return; }
+                const d = await res.json();
+                if (d.success) {
+                    trashData = d.data || { rooms: [], invoices: [], expenses: [], incomes: [], complaints: [], payments: [] };
+                    const counts = d.counts || {};
+                    document.getElementById('trash-count-all').innerText = d.totalCount || 0;
+                    document.getElementById('trash-count-rooms').innerText = counts.rooms || 0;
+                    document.getElementById('trash-count-invoices').innerText = counts.invoices || 0;
+                    document.getElementById('trash-count-expenses').innerText = counts.expenses || 0;
+                    document.getElementById('trash-count-incomes').innerText = counts.incomes || 0;
+                    document.getElementById('trash-count-complaints').innerText = counts.complaints || 0;
+                    document.getElementById('trash-count-payments').innerText = counts.payments || 0;
+
+                    updateTrashBadge();
+                    renderTrashList();
+                } else {
+                    showToast(d.message || 'Gagal memuat tempat sampah', 'danger');
+                }
+            } catch (err) {
+                showToast('Kesalahan jaringan: ' + err.message, 'danger');
+            }
+        }
+
+        function setTrashFilter(filter) {
+            activeTrashFilter = filter;
+            ['all', 'rooms', 'invoices', 'expenses', 'incomes', 'complaints', 'payments'].forEach(f => {
+                const btn = document.getElementById(`trash-filter-${f}`);
+                if (!btn) return;
+                if (f === filter) {
+                    btn.className = "px-3.5 py-1.5 rounded-xl font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap";
+                } else {
+                    btn.className = "px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition whitespace-nowrap";
+                }
+            });
+            renderTrashList();
+        }
+
+        function renderTrashList() {
+            const tbody = document.getElementById('trash-table-body');
+            if (!tbody) return;
+
+            let items = [];
+            if (activeTrashFilter === 'all' || activeTrashFilter === 'rooms') {
+                (trashData.rooms || []).forEach(r => {
+                    items.push({
+                        type: 'rooms',
+                        typeLabel: 'Unit Kamar',
+                        typeBadgeClass: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+                        id: r.id,
+                        title: `Unit ${r.number} (${r.type || 'Standard'})`,
+                        subtitle: r.tenant_name ? `Penghuni: ${r.tenant_name} (${r.tenant_phone || '-'})` : 'Status: Kosong',
+                        deletedAt: r.deleted_at
+                    });
+                });
+            }
+
+            if (activeTrashFilter === 'all' || activeTrashFilter === 'invoices') {
+                (trashData.invoices || []).forEach(i => {
+                    items.push({
+                        type: 'invoices',
+                        typeLabel: 'Tagihan Sewa',
+                        typeBadgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
+                        id: i.id,
+                        title: `Tagihan ${i.room_number ? 'Unit ' + i.room_number : i.id} - ${i.month_year}`,
+                        subtitle: `Nominal: ${formatRupiah(i.amount)} • Penyewa: ${i.tenant_name || '-'}`,
+                        deletedAt: i.deleted_at
+                    });
+                });
+            }
+
+            if (activeTrashFilter === 'all' || activeTrashFilter === 'expenses') {
+                (trashData.expenses || []).forEach(e => {
+                    items.push({
+                        type: 'expenses',
+                        typeLabel: 'Pengeluaran',
+                        typeBadgeClass: 'bg-rose-100 text-rose-700 border-rose-200',
+                        id: e.id,
+                        title: `${e.category}: ${formatRupiah(e.amount)}`,
+                        subtitle: `${e.note || '-'} (Tanggal: ${e.date})`,
+                        deletedAt: e.deleted_at
+                    });
+                });
+            }
+
+            if (activeTrashFilter === 'all' || activeTrashFilter === 'incomes') {
+                (trashData.incomes || []).forEach(g => {
+                    items.push({
+                        type: 'incomes',
+                        typeLabel: 'Pemasukan Kas',
+                        typeBadgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                        id: g.id,
+                        title: `${g.category}: ${formatRupiah(g.amount)}`,
+                        subtitle: `${g.note || '-'} (Tanggal: ${g.date})`,
+                        deletedAt: g.deleted_at
+                    });
+                });
+            }
+
+            if (activeTrashFilter === 'all' || activeTrashFilter === 'complaints') {
+                (trashData.complaints || []).forEach(c => {
+                    items.push({
+                        type: 'complaints',
+                        typeLabel: 'Keluhan',
+                        typeBadgeClass: 'bg-purple-100 text-purple-700 border-purple-200',
+                        id: c.id,
+                        title: `Unit ${c.room_number || '-'} [${c.category}]: ${c.description}`,
+                        subtitle: `Pelapor: ${c.tenant_name || '-'} (${c.tenant_phone || '-'})`,
+                        deletedAt: c.deleted_at
+                    });
+                });
+            }
+
+            if (activeTrashFilter === 'all' || activeTrashFilter === 'payments') {
+                (trashData.payments || []).forEach(p => {
+                    items.push({
+                        type: 'payments',
+                        typeLabel: 'Cicilan Pembayaran',
+                        typeBadgeClass: 'bg-sky-100 text-sky-700 border-sky-200',
+                        id: p.id,
+                        title: `Cicilan ${formatRupiah(p.amount)} (${p.payment_method || 'Transfer'})`,
+                        subtitle: `Tagihan ${p.room_number ? 'Unit ' + p.room_number : ''} ${p.month_year ? '[' + p.month_year + ']' : ''} • Tgl: ${p.payment_date}`,
+                        deletedAt: p.deleted_at
+                    });
+                });
+            }
+
+            // Urutkan dari yang paling baru dihapus
+            items.sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
+
+            if (items.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="p-8 text-center text-slate-400">
+                            <div class="flex flex-col items-center gap-2">
+                                <i data-lucide="check-circle-2" class="w-8 h-8 text-emerald-400"></i>
+                                <span class="font-semibold text-xs">Tempat sampah kosong. Tidak ada data terhapus.</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            tbody.innerHTML = items.map(item => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="p-3.5 whitespace-nowrap">
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold border ${item.typeBadgeClass}">
+                            ${escapeHtml(item.typeLabel)}
+                        </span>
+                    </td>
+                    <td class="p-3.5">
+                        <div class="font-bold text-slate-800 text-xs">${escapeHtml(item.title)}</div>
+                        <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(item.subtitle)}</div>
+                    </td>
+                    <td class="p-3.5 whitespace-nowrap text-[11px] text-slate-500">
+                        ${escapeHtml(item.deletedAt || '-')}
+                    </td>
+                    <td class="p-3.5 text-right whitespace-nowrap space-x-2">
+                        <button type="button" onclick="restoreTrashItem('${item.type}', '${item.id}', '${escapeAttrJs(item.title)}')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold rounded-lg text-[11px] inline-flex items-center gap-1 transition">
+                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Pulihkan
+                        </button>
+                        <button type="button" onclick="purgeTrashItem('${item.type}', '${item.id}', '${escapeAttrJs(item.title)}')" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-lg text-[11px] inline-flex items-center gap-1 transition">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Permanen
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        async function restoreTrashItem(type, id, title) {
+            if (!confirm(`Pulihkan "${title}" kembali ke daftar aktif?`)) return;
+            try {
+                const res = await fetch('/api/trash/restore', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ type, id })
+                });
+                const d = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    showToast(d.message || 'Data berhasil dipulihkan');
+                    await loadTrashData();
+                    await loadAllData();
+                } else {
+                    showToast(d.message || 'Gagal memulihkan data', 'danger');
+                }
+            } catch (err) {
+                showToast('Kesalahan jaringan: ' + err.message, 'danger');
+            }
+        }
+
+        async function purgeTrashItem(type, id, title) {
+            if (!confirm(`PERINGATAN: Yakin ingin MENGHAPUS PERMANEN "${title}"? Data tidak dapat dipulihkan lagi.`)) return;
+            try {
+                const res = await fetch('/api/trash/purge', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ type, id })
+                });
+                const d = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    showToast(d.message || 'Data berhasil dihapus permanen');
+                    await loadTrashData();
+                } else {
+                    showToast(d.message || 'Gagal menghapus data', 'danger');
+                }
+            } catch (err) {
+                showToast('Kesalahan jaringan: ' + err.message, 'danger');
+            }
+        }
+
+        async function purgeAllTrash() {
+            const count = parseInt(document.getElementById('trash-count-all')?.innerText || '0', 10);
+            if (count === 0) {
+                showToast('Tempat sampah sudah kosong', 'info');
+                return;
+            }
+            if (!confirm(`PERINGATAN KRITIS: Anda akan menghapus ${count} data secara PERMANEN dari seluruh tempat sampah!\n\nTindakan ini TIDAK DAPAT DIBATALKAN. Lanjutkan?`)) return;
+            try {
+                const res = await fetch('/api/trash/purge', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ purgeAll: true })
+                });
+                const d = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    showToast(d.message || 'Seluruh tempat sampah berhasil dibersihkan');
+                    await loadTrashData();
+                } else {
+                    showToast(d.message || 'Gagal mengosongkan tempat sampah', 'danger');
+                }
+            } catch (err) {
+                showToast('Kesalahan jaringan: ' + err.message, 'danger');
+            }
         }
 
         window.onload = function() {

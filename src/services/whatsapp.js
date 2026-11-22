@@ -329,7 +329,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
 
         const currentMonthStr = today.slice(0, 7);
         const totalMonthly = db.prepare(`
-            SELECT SUM(amount) as total FROM expenses WHERE substr(date, 1, 7) = ?
+            SELECT SUM(amount) as total FROM expenses WHERE substr(date, 1, 7) = ? AND deleted_at IS NULL
         `).get(currentMonthStr)?.total || amount;
 
         const { current_balance } = getUnifiedTransactions();
@@ -407,9 +407,9 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
         const targetQuery = batalMatch[1] ? batalMatch[1].trim() : '';
         let target = null;
         if (targetQuery && /^EXP-/i.test(targetQuery)) {
-            target = db.prepare('SELECT * FROM expenses WHERE id = ?').get(targetQuery);
+            target = db.prepare('SELECT * FROM expenses WHERE id = ? AND deleted_at IS NULL').get(targetQuery);
         } else {
-            target = db.prepare('SELECT * FROM expenses ORDER BY created_at DESC LIMIT 1').get();
+            target = db.prepare('SELECT * FROM expenses WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1').get();
         }
 
         if (!target) {
@@ -418,7 +418,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             return { success: false, message: errReply };
         }
 
-        db.prepare('DELETE FROM expenses WHERE id = ?').run(target.id);
+        db.prepare("UPDATE expenses SET deleted_at = datetime('now', '+7 hours') WHERE id = ?").run(target.id);
         const { current_balance } = getUnifiedTransactions();
 
         const replyText = `Catatan pengeluaran berhasil dibatalkan:\n` +
@@ -476,7 +476,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             `).run(my.monthKey, parsedAmt);
 
             const expRow = db.prepare(`
-                SELECT SUM(amount) as total FROM expenses WHERE substr(date, 1, 7) = ?
+                SELECT SUM(amount) as total FROM expenses WHERE substr(date, 1, 7) = ? AND deleted_at IS NULL
             `).get(my.monthKey)?.total || 0;
             const remaining = Math.max(parsedAmt - expRow, 0);
             const pct = Math.round((expRow / parsedAmt) * 100);
@@ -492,7 +492,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
         } else {
             const bRow = db.prepare('SELECT amount FROM budgets WHERE month = ?').get(my.monthKey);
             const expRow = db.prepare(`
-                SELECT SUM(amount) as total FROM expenses WHERE substr(date, 1, 7) = ?
+                SELECT SUM(amount) as total FROM expenses WHERE substr(date, 1, 7) = ? AND deleted_at IS NULL
             `).get(my.monthKey)?.total || 0;
 
             let replyText = '';
@@ -524,7 +524,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
         const rows = db.prepare(`
             SELECT category, SUM(amount) as total, COUNT(*) as count
             FROM expenses
-            WHERE substr(date, 1, 7) = ?
+            WHERE substr(date, 1, 7) = ? AND deleted_at IS NULL
             GROUP BY category
             ORDER BY total DESC
         `).all(my.monthKey);
@@ -548,12 +548,13 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
 
     // 9. Rekapitulasi Pembayaran: #list atau #daftar atau #rekap
     if (/^#?(list|daftar|rekap)$/i.test(trimmed)) {
-        const rooms = db.prepare('SELECT * FROM rooms ORDER BY number ASC').all();
+        const rooms = db.prepare('SELECT * FROM rooms WHERE deleted_at IS NULL ORDER BY number ASC').all();
         const allInvoices = db.prepare(`
             SELECT i.*,
-                   COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount,
-                   MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0), 0) as remaining_amount
+                   COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0) as paid_amount,
+                   MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0), 0) as remaining_amount
             FROM invoices i
+            WHERE i.deleted_at IS NULL
             ORDER BY i.due_date ASC, i.created_at ASC
         `).all();
 
@@ -650,18 +651,18 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
 
     // 10. Cek Status: #status atau #cek
     if (/^#?(status|cek)$/i.test(trimmed)) {
-        const rooms = db.prepare('SELECT * FROM rooms').all();
+        const rooms = db.prepare('SELECT * FROM rooms WHERE deleted_at IS NULL').all();
         const total = rooms.length;
         const occupied = rooms.filter(r => r.status === 'TERISI').length;
         const vacant = total - occupied;
 
         const unpaid = db.prepare(`
             SELECT i.*, r.number as room_number, r.tenant_name,
-                   COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount,
-                   MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0), 0) as remaining_amount
+                   COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0) as paid_amount,
+                   MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0), 0) as remaining_amount
             FROM invoices i
             JOIN rooms r ON i.room_id = r.id
-            WHERE i.status != 'LUNAS'
+            WHERE i.status != 'LUNAS' AND i.deleted_at IS NULL AND r.deleted_at IS NULL
             ORDER BY i.due_date ASC
         `).all();
 
@@ -728,6 +729,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             WHERE (REPLACE(REPLACE(REPLACE(LOWER(number), '.', ''), '-', ''), ' ', '') = ? 
                OR REPLACE(REPLACE(REPLACE(LOWER(id), '.', ''), '-', ''), ' ', '') = ?
                OR LOWER(number) = LOWER(?))
+              AND deleted_at IS NULL
             LIMIT 1
         `).get(cleanQuery, cleanQuery, queryUnit);
 
@@ -780,7 +782,7 @@ async function handleIncomingWhatsAppMessage(senderPhone, text, remoteJid, origi
             SELECT c.*, r.number as room_number
             FROM complaints c
             JOIN rooms r ON c.room_id = r.id
-            WHERE c.status != 'SELESAI'
+            WHERE c.status != 'SELESAI' AND c.deleted_at IS NULL AND r.deleted_at IS NULL
             ORDER BY c.created_at DESC
         `).all();
 

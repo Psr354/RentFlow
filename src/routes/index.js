@@ -16,7 +16,8 @@ const {
     readBody,
     parseJsonBody,
     serveStaticFile,
-    constantTimeCompare
+    constantTimeCompare,
+    revokeToken
 } = require('../utils/security');
 const {
     getTodayWIB,
@@ -47,6 +48,15 @@ const {
     buildSystemNoticeEmailHtml,
     runReminderCheck
 } = require('../services/scheduler');
+const {
+    validateRoom,
+    validateInvoice,
+    validatePayment,
+    validateExpense,
+    validateIncome,
+    validateBudget,
+    validateComplaint
+} = require('../utils/validator');
 
 
 const ALLOWED_SETTING_KEYS = new Set([
@@ -183,6 +193,15 @@ async function handleRequest(req, res) {
         return;
     }
 
+    if (req.method === 'POST' && pathname === '/api/logout') {
+        const authHeader = req.headers?.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.substring(7).trim();
+            revokeToken(token);
+        }
+        return send(res, 200, { success: true, message: 'Sesi berhasil diakhiri' });
+    }
+
     // 3. Webhook Eksternal WhatsApp (Kompatibel dengan Fonnte / Gateway lain)
     if (req.method === 'POST' && pathname === '/api/webhook/whatsapp') {
         if (!verifyWebhookSecret(req)) {
@@ -213,12 +232,12 @@ async function handleRequest(req, res) {
             }
             const invoice = db.prepare(`
                 SELECT i.*,
-                       COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount,
-                       MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0), 0) as remaining_amount,
+                       COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0) as paid_amount,
+                       MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0), 0) as remaining_amount,
                        r.number as room_number, r.type as room_type, r.tenant_name, r.tenant_phone, r.tenant_email
                 FROM invoices i
                 JOIN rooms r ON i.room_id = r.id
-                WHERE i.id = ?
+                WHERE i.id = ? AND i.deleted_at IS NULL AND r.deleted_at IS NULL
             `).get(invoiceId);
 
             if (!invoice) return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
@@ -246,7 +265,7 @@ async function handleRequest(req, res) {
             invoice.months_list = monthsList;
             invoice.months_label = formatMonthsDisplay(monthsList);
 
-            const payments = db.prepare('SELECT id, invoice_id, amount, payment_method, payment_date, notes, created_at FROM invoice_payments WHERE invoice_id = ? ORDER BY payment_date ASC, created_at ASC').all(invoiceId);
+            const payments = db.prepare('SELECT id, invoice_id, amount, payment_method, payment_date, notes, created_at FROM invoice_payments WHERE invoice_id = ? AND deleted_at IS NULL ORDER BY payment_date ASC, created_at ASC').all(invoiceId);
 
             const rawSettings = getSettings();
             const publicSettings = {
@@ -272,12 +291,12 @@ async function handleRequest(req, res) {
                     const { payment_method, proof_image, amount, notes, token } = JSON.parse(body || '{}');
                     const invoice = db.prepare(`
                         SELECT i.*,
-                               COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount,
-                               MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0), 0) as remaining_amount,
+                               COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0) as paid_amount,
+                               MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0), 0) as remaining_amount,
                                r.number as room_number, r.tenant_name
                         FROM invoices i
                         JOIN rooms r ON i.room_id = r.id
-                        WHERE i.id = ?
+                        WHERE i.id = ? AND i.deleted_at IS NULL AND r.deleted_at IS NULL
                     `).get(invoiceId);
 
                     if (!invoice) return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
@@ -454,48 +473,48 @@ async function handleRequest(req, res) {
     // 5. Endpoint Statistik Dashboard
     if (req.method === 'GET' && pathname === '/api/stats') {
         try {
-            const rooms = db.prepare('SELECT * FROM rooms').all();
-            const expenses = db.prepare('SELECT * FROM expenses').all();
+            const roomStats = db.prepare(`
+                SELECT 
+                    COUNT(*) as total_rooms,
+                    COUNT(CASE WHEN status = 'TERISI' THEN 1 END) as occupied_rooms
+                FROM rooms WHERE deleted_at IS NULL
+            `).get();
 
-            const totalRooms = rooms.length;
-            const occupiedRooms = rooms.filter(r => r.status === 'TERISI').length;
+            const totalRooms = roomStats.total_rooms;
+            const occupiedRooms = roomStats.occupied_rooms;
             const vacantRooms = totalRooms - occupiedRooms;
 
-            const totalPaidFromPayments = db.prepare('SELECT COALESCE(SUM(amount), 0) as s FROM invoice_payments').get().s;
+            const totalPaidFromPayments = db.prepare('SELECT COALESCE(SUM(amount), 0) as s FROM invoice_payments WHERE deleted_at IS NULL').get().s;
             const legacyPaid = db.prepare(`
                 SELECT COALESCE(SUM(amount), 0) as s FROM invoices 
-                WHERE status = 'LUNAS' AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = invoices.id)
+                WHERE status = 'LUNAS' AND deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = invoices.id AND ip.deleted_at IS NULL)
             `).get().s;
             const totalPaid = totalPaidFromPayments + legacyPaid;
 
-            const invBalances = db.prepare(`
-                SELECT i.id, i.amount, i.status,
-                       COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount
-                FROM invoices i
-            `).all();
+            const invoiceStats = db.prepare(`
+                SELECT
+                    COALESCE(SUM(CASE WHEN status != 'LUNAS' THEN remaining_amount ELSE 0 END), 0) as total_unpaid,
+                    COALESCE(SUM(CASE WHEN status = 'MENUNGGU_VERIFIKASI' THEN remaining_amount ELSE 0 END), 0) as total_pending,
+                    COUNT(CASE WHEN status = 'SEBAGIAN' THEN 1 END) as partial_count
+                FROM v_invoice_balances
+            `).get();
 
-            const totalUnpaid = invBalances
-                .filter(i => i.status !== 'LUNAS')
-                .reduce((acc, i) => acc + Math.max(i.amount - i.paid_amount, 0), 0);
+            const totalUnpaid = invoiceStats.total_unpaid;
+            const totalPending = invoiceStats.total_pending;
+            const partialInvoicesCount = invoiceStats.partial_count;
 
-            const totalPending = invBalances
-                .filter(i => i.status === 'MENUNGGU_VERIFIKASI')
-                .reduce((acc, i) => acc + Math.max(i.amount - i.paid_amount, 0), 0);
-
-            const partialInvoicesCount = invBalances.filter(i => i.status === 'SEBAGIAN').length;
-
-            const totalExpense = expenses.reduce((acc, e) => acc + Number(e.amount), 0);
+            const totalExpense = db.prepare('SELECT COALESCE(SUM(amount), 0) as s FROM expenses WHERE deleted_at IS NULL').get().s;
             const netProfit = totalPaid - totalExpense;
 
             const today = getTodayWIB();
             const overdueListRaw = db.prepare(`
                 SELECT i.*,
-                       COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount,
-                       MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0), 0) as remaining_amount,
+                       COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0) as paid_amount,
+                       MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0), 0) as remaining_amount,
                        r.number as room_number, r.tenant_name, r.tenant_phone, r.tenant_email
                 FROM invoices i
                 JOIN rooms r ON i.room_id = r.id
-                WHERE i.status IN ('BELUM_BAYAR', 'SEBAGIAN') AND i.due_date <= date(?, '+7 days')
+                WHERE i.status IN ('BELUM_BAYAR', 'SEBAGIAN') AND i.deleted_at IS NULL AND r.deleted_at IS NULL AND i.due_date <= date(?, '+7 days')
                 ORDER BY i.due_date ASC
             `).all(today);
 
@@ -512,16 +531,16 @@ async function handleRequest(req, res) {
 
             const pendingList = db.prepare(`
                 SELECT i.*,
-                       COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount,
-                       MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0), 0) as remaining_amount,
+                       COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0) as paid_amount,
+                       MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0), 0) as remaining_amount,
                        r.number as room_number, r.tenant_name, r.tenant_phone
                 FROM invoices i
                 JOIN rooms r ON i.room_id = r.id
-                WHERE i.status = 'MENUNGGU_VERIFIKASI'
+                WHERE i.status = 'MENUNGGU_VERIFIKASI' AND i.deleted_at IS NULL AND r.deleted_at IS NULL
                 ORDER BY i.created_at DESC
             `).all();
 
-            const activeComplaints = db.prepare("SELECT count(*) as c FROM complaints WHERE status != 'SELESAI'").get().c;
+            const activeComplaints = db.prepare("SELECT count(*) as c FROM complaints WHERE status != 'SELESAI' AND deleted_at IS NULL").get().c;
 
             return send(res, 200, {
                 totalRooms,
@@ -545,7 +564,7 @@ async function handleRequest(req, res) {
     // 6. CRUD Rooms (Unit A - K)
     if (pathname === '/api/rooms') {
         if (req.method === 'GET') {
-            const rows = db.prepare('SELECT * FROM rooms ORDER BY number ASC').all();
+            const rows = db.prepare('SELECT * FROM rooms WHERE deleted_at IS NULL ORDER BY number ASC').all();
             return send(res, 200, rows);
         }
 
@@ -553,6 +572,8 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const r = JSON.parse(body || '{}');
+                    const v = validateRoom(r, false);
+                    if (!v.valid) return send(res, 400, { success: false, message: v.message });
                     const id = (r.id && /^[a-zA-Z0-9._-]+$/.test(String(r.id).trim()))
                         ? String(r.id).trim()
                         : `unit-${crypto.randomBytes(4).toString('hex')}`;
@@ -568,7 +589,8 @@ async function handleRequest(req, res) {
                             tenant_phone = excluded.tenant_phone,
                             tenant_email = excluded.tenant_email,
                             due_day = excluded.due_day,
-                            entry_date = excluded.entry_date
+                            entry_date = excluded.entry_date,
+                            deleted_at = NULL
                     `);
                     stmt.run(
                         id,
@@ -598,7 +620,9 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const r = JSON.parse(body || '{}');
-                    const exist = db.prepare('SELECT * FROM rooms WHERE id = ?').get(id);
+                    const v = validateRoom(r, true);
+                    if (!v.valid) return send(res, 400, { success: false, message: v.message });
+                    const exist = db.prepare('SELECT * FROM rooms WHERE id = ? AND deleted_at IS NULL').get(id);
                     if (!exist) return send(res, 404, { success: false, message: 'Unit tidak ditemukan' });
 
                     db.prepare(`
@@ -634,23 +658,28 @@ async function handleRequest(req, res) {
         }
 
         if (req.method === 'DELETE') {
+            const now = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 19);
             db.exec('BEGIN IMMEDIATE;');
             try {
-                const invRows = db.prepare('SELECT id FROM invoices WHERE room_id = ?').all(id);
-                const delPayStmt = db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?');
-                const delNotifStmt = db.prepare('DELETE FROM notification_logs WHERE invoice_id = ?');
-                for (const inv of invRows) {
-                    delPayStmt.run(inv.id);
-                    delNotifStmt.run(inv.id);
+                const exist = db.prepare('SELECT id FROM rooms WHERE id = ? AND deleted_at IS NULL').get(id);
+                if (!exist) {
+                    db.exec('ROLLBACK;');
+                    return send(res, 404, { success: false, message: 'Unit tidak ditemukan' });
                 }
-                db.prepare('DELETE FROM invoices WHERE room_id = ?').run(id);
-                db.prepare('DELETE FROM complaints WHERE room_id = ?').run(id);
-                db.prepare('DELETE FROM rooms WHERE id = ?').run(id);
+                const invRows = db.prepare('SELECT id FROM invoices WHERE room_id = ? AND deleted_at IS NULL').all(id);
+                const delPayStmt = db.prepare('UPDATE invoice_payments SET deleted_at = ? WHERE invoice_id = ? AND deleted_at IS NULL');
+                const delInvStmt = db.prepare('UPDATE invoices SET deleted_at = ? WHERE id = ?');
+                for (const inv of invRows) {
+                    delPayStmt.run(now, inv.id);
+                    delInvStmt.run(now, inv.id);
+                }
+                db.prepare('UPDATE complaints SET deleted_at = ? WHERE room_id = ? AND deleted_at IS NULL').run(now, id);
+                db.prepare('UPDATE rooms SET deleted_at = ? WHERE id = ?').run(now, id);
                 db.exec('COMMIT;');
-                return send(res, 200, { success: true, message: 'Unit dan seluruh data terkait berhasil dihapus' });
+                return send(res, 200, { success: true, message: 'Unit dan seluruh data terkait dipindahkan ke Tempat Sampah' });
             } catch (err) {
                 db.exec('ROLLBACK;');
-                return send(res, 500, { success: false, message: 'Gagal menghapus unit: ' + err.message });
+                return send(res, 500, { success: false, message: 'Gagal memindahkan unit ke Tempat Sampah: ' + err.message });
             }
         }
     }
@@ -660,12 +689,13 @@ async function handleRequest(req, res) {
         if (req.method === 'GET') {
             const rows = db.prepare(`
                 SELECT i.*,
-                       COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount,
-                       MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0), 0) as remaining_amount,
-                       (SELECT COUNT(id) FROM invoice_payments WHERE invoice_id = i.id) as payment_count,
+                       COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0) as paid_amount,
+                       MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0), 0) as remaining_amount,
+                       (SELECT COUNT(id) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL) as payment_count,
                        r.number as room_number, r.tenant_name, r.tenant_phone, r.tenant_email
                 FROM invoices i
                 JOIN rooms r ON i.room_id = r.id
+                WHERE i.deleted_at IS NULL AND r.deleted_at IS NULL
                 ORDER BY i.due_date DESC, i.created_at DESC
             `).all();
             const rowsWithMonths = rows.map(inv => {
@@ -683,6 +713,8 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const inv = JSON.parse(body || '{}');
+                    const v = validateInvoice(inv, false);
+                    if (!v.valid) return send(res, 400, { success: false, message: v.message });
                     const id = (inv.id && /^[a-zA-Z0-9._-]+$/.test(String(inv.id).trim()))
                         ? String(inv.id).trim()
                         : `INV-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
@@ -697,7 +729,8 @@ async function handleRequest(req, res) {
                             due_date = excluded.due_date,
                             status = excluded.status,
                             payment_method = excluded.payment_method,
-                            notes = excluded.notes
+                            notes = excluded.notes,
+                            deleted_at = NULL
                     `);
                     stmt.run(
                         id,
@@ -723,7 +756,7 @@ async function handleRequest(req, res) {
     if (req.method === 'GET' && pathname.endsWith('/payments') && pathname.startsWith('/api/invoices/')) {
         const id = decodeURIComponent(pathname.replace('/api/invoices/', '').replace('/payments', ''));
         const payments = db.prepare(`
-            SELECT * FROM invoice_payments WHERE invoice_id = ? ORDER BY payment_date DESC, created_at DESC
+            SELECT * FROM invoice_payments WHERE invoice_id = ? AND deleted_at IS NULL ORDER BY payment_date DESC, created_at DESC
         `).all(id);
         return send(res, 200, { success: true, payments });
     }
@@ -735,7 +768,7 @@ async function handleRequest(req, res) {
         readBody(req, res, (body) => {
             try {
                 const data = JSON.parse(body || '{}');
-                const exist = db.prepare('SELECT * FROM invoice_payments WHERE id = ? AND invoice_id = ?').get(payId, invId);
+                const exist = db.prepare('SELECT * FROM invoice_payments WHERE id = ? AND invoice_id = ? AND deleted_at IS NULL').get(payId, invId);
                 if (!exist) return send(res, 404, { success: false, message: 'Catatan pembayaran tidak ditemukan' });
 
                 db.prepare(`
@@ -767,29 +800,31 @@ async function handleRequest(req, res) {
         const parts = pathname.replace('/api/invoices/', '').split('/payments/');
         const invId = decodeURIComponent(parts[0]);
         const payId = decodeURIComponent(parts[1]);
+        const now = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 19);
         db.exec('BEGIN IMMEDIATE;');
         try {
-            db.prepare('DELETE FROM invoice_payments WHERE id = ? AND invoice_id = ?').run(payId, invId);
+            db.prepare('UPDATE invoice_payments SET deleted_at = ? WHERE id = ? AND invoice_id = ? AND deleted_at IS NULL').run(now, payId, invId);
             const resStatus = recalculateInvoiceStatus(invId);
             db.exec('COMMIT;');
-            return send(res, 200, { success: true, message: 'Catatan pembayaran cicilan berhasil dihapus', ...resStatus });
+            return send(res, 200, { success: true, message: 'Catatan pembayaran cicilan berhasil dipindahkan ke Tempat Sampah', ...resStatus });
         } catch (err) {
             db.exec('ROLLBACK;');
-            return send(res, 500, { success: false, message: 'Gagal menghapus catatan cicilan: ' + err.message });
+            return send(res, 500, { success: false, message: 'Gagal memindahkan catatan cicilan ke Tempat Sampah: ' + err.message });
         }
     }
 
     if (req.method === 'DELETE' && pathname.endsWith('/payments') && pathname.startsWith('/api/invoices/')) {
         const invId = decodeURIComponent(pathname.replace('/api/invoices/', '').replace('/payments', ''));
+        const now = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 19);
         db.exec('BEGIN IMMEDIATE;');
         try {
-            db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(invId);
+            db.prepare('UPDATE invoice_payments SET deleted_at = ? WHERE invoice_id = ? AND deleted_at IS NULL').run(now, invId);
             const resStatus = recalculateInvoiceStatus(invId, true);
             db.exec('COMMIT;');
-            return send(res, 200, { success: true, message: 'Semua catatan pembayaran cicilan berhasil dihapus', ...resStatus });
+            return send(res, 200, { success: true, message: 'Semua catatan pembayaran cicilan berhasil dipindahkan ke Tempat Sampah', ...resStatus });
         } catch (err) {
             db.exec('ROLLBACK;');
-            return send(res, 500, { success: false, message: 'Gagal menghapus semua cicilan: ' + err.message });
+            return send(res, 500, { success: false, message: 'Gagal memindahkan semua cicilan ke Tempat Sampah: ' + err.message });
         }
     }
 
@@ -815,7 +850,10 @@ async function handleRequest(req, res) {
         const id = decodeURIComponent(pathname.replace('/api/invoices/', '').replace('/pay', ''));
         readBody(req, res, (body) => {
             try {
-                const { amount, payment_method, payment_date, notes } = JSON.parse(body || '{}');
+                const payData = JSON.parse(body || '{}');
+                const v = validatePayment(payData);
+                if (!v.valid) return send(res, 400, { success: false, message: v.message });
+                const { amount, payment_method, payment_date, notes } = payData;
                 const inv = db.prepare('SELECT * FROM invoices WHERE id = ?').get(id);
                 if (!inv) return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
 
@@ -1029,7 +1067,9 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const inv = JSON.parse(body || '{}');
-                    const exist = db.prepare('SELECT * FROM invoices WHERE id = ?').get(id);
+                    const v = validateInvoice(inv, true);
+                    if (!v.valid) return send(res, 400, { success: false, message: v.message });
+                    const exist = db.prepare('SELECT * FROM invoices WHERE id = ? AND deleted_at IS NULL').get(id);
                     if (!exist) return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
 
                     db.prepare(`
@@ -1063,16 +1103,21 @@ async function handleRequest(req, res) {
         }
 
         if (req.method === 'DELETE') {
+            const now = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 19);
             db.exec('BEGIN IMMEDIATE;');
             try {
-                db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(id);
-                db.prepare('DELETE FROM notification_logs WHERE invoice_id = ?').run(id);
-                db.prepare('DELETE FROM invoices WHERE id = ?').run(id);
+                const exist = db.prepare('SELECT id FROM invoices WHERE id = ? AND deleted_at IS NULL').get(id);
+                if (!exist) {
+                    db.exec('ROLLBACK;');
+                    return send(res, 404, { success: false, message: 'Tagihan tidak ditemukan' });
+                }
+                db.prepare('UPDATE invoice_payments SET deleted_at = ? WHERE invoice_id = ? AND deleted_at IS NULL').run(now, id);
+                db.prepare('UPDATE invoices SET deleted_at = ? WHERE id = ?').run(now, id);
                 db.exec('COMMIT;');
-                return send(res, 200, { success: true, message: 'Tagihan dan seluruh riwayatnya berhasil dihapus' });
+                return send(res, 200, { success: true, message: 'Tagihan berhasil dipindahkan ke Tempat Sampah' });
             } catch (err) {
                 db.exec('ROLLBACK;');
-                return send(res, 500, { success: false, message: 'Gagal menghapus tagihan: ' + err.message });
+                return send(res, 500, { success: false, message: 'Gagal memindahkan tagihan ke Tempat Sampah: ' + err.message });
             }
         }
     }
@@ -1080,7 +1125,7 @@ async function handleRequest(req, res) {
     // 8. CRUD Expenses
     if (pathname === '/api/expenses') {
         if (req.method === 'GET') {
-            const rows = db.prepare('SELECT * FROM expenses ORDER BY date DESC, created_at DESC').all();
+            const rows = db.prepare('SELECT * FROM expenses WHERE deleted_at IS NULL ORDER BY date DESC, created_at DESC').all();
             return send(res, 200, rows);
         }
 
@@ -1088,6 +1133,8 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const exp = JSON.parse(body || '{}');
+                    const v = validateExpense(exp, false);
+                    if (!v.valid) return send(res, 400, { success: false, message: v.message });
                     const id = (exp.id && /^[a-zA-Z0-9._-]+$/.test(String(exp.id).trim()))
                         ? String(exp.id).trim()
                         : `EXP-${Date.now()}`;
@@ -1098,7 +1145,8 @@ async function handleRequest(req, res) {
                             date = excluded.date,
                             category = excluded.category,
                             amount = excluded.amount,
-                            note = excluded.note
+                            note = excluded.note,
+                            deleted_at = NULL
                     `);
                     stmt.run(
                         id,
@@ -1123,7 +1171,9 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const exp = JSON.parse(body || '{}');
-                    const exist = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+                    const v = validateExpense(exp, true);
+                    if (!v.valid) return send(res, 400, { success: false, message: v.message });
+                    const exist = db.prepare('SELECT * FROM expenses WHERE id = ? AND deleted_at IS NULL').get(id);
                     if (!exist) return send(res, 404, { success: false, message: 'Pengeluaran tidak ditemukan' });
 
                     db.prepare(`
@@ -1149,8 +1199,12 @@ async function handleRequest(req, res) {
         }
 
         if (req.method === 'DELETE') {
-            db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
-            return send(res, 200, { success: true, message: 'Pengeluaran berhasil dihapus' });
+            const now = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+            const resRun = db.prepare('UPDATE expenses SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL').run(now, id);
+            if (resRun.changes === 0) {
+                return send(res, 404, { success: false, message: 'Pengeluaran tidak ditemukan' });
+            }
+            return send(res, 200, { success: true, message: 'Pengeluaran berhasil dipindahkan ke Tempat Sampah' });
         }
     }
 
@@ -1161,6 +1215,7 @@ async function handleRequest(req, res) {
                 SELECT c.*, r.number as room_number
                 FROM complaints c
                 JOIN rooms r ON c.room_id = r.id
+                WHERE c.deleted_at IS NULL AND r.deleted_at IS NULL
                 ORDER BY c.created_at DESC
             `).all();
             return send(res, 200, rows);
@@ -1206,7 +1261,7 @@ async function handleRequest(req, res) {
                     db.prepare(`
                         UPDATE complaints
                         SET status = ?, admin_notes = ?, resolved_at = COALESCE(?, resolved_at)
-                        WHERE id = ?
+                        WHERE id = ? AND deleted_at IS NULL
                     `).run(status, admin_notes || '', resolvedAt, id);
                     return send(res, 200, { success: true, message: 'Status keluhan berhasil diperbarui' });
                 } catch (err) {
@@ -1223,7 +1278,7 @@ async function handleRequest(req, res) {
             readBody(req, res, (body) => {
                 try {
                     const c = JSON.parse(body || '{}');
-                    const exist = db.prepare('SELECT * FROM complaints WHERE id = ?').get(id);
+                    const exist = db.prepare('SELECT * FROM complaints WHERE id = ? AND deleted_at IS NULL').get(id);
                     if (!exist) return send(res, 404, { success: false, message: 'Keluhan tidak ditemukan' });
 
                     const resolvedAt = c.status === 'SELESAI'
@@ -1261,8 +1316,12 @@ async function handleRequest(req, res) {
         }
 
         if (req.method === 'DELETE') {
-            db.prepare('DELETE FROM complaints WHERE id = ?').run(id);
-            return send(res, 200, { success: true, message: 'Keluhan berhasil dihapus' });
+            const now = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+            const resRun = db.prepare('UPDATE complaints SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL').run(now, id);
+            if (resRun.changes === 0) {
+                return send(res, 404, { success: false, message: 'Keluhan tidak ditemukan' });
+            }
+            return send(res, 200, { success: true, message: 'Keluhan berhasil dipindahkan ke Tempat Sampah' });
         }
     }
 
@@ -1430,7 +1489,7 @@ async function handleRequest(req, res) {
         const month = query.month;
         if (month) {
             const b = db.prepare('SELECT * FROM budgets WHERE month = ?').get(month);
-            const exp = db.prepare('SELECT SUM(amount) as total FROM expenses WHERE substr(date, 1, 7) = ?').get(month)?.total || 0;
+            const exp = db.prepare('SELECT SUM(amount) as total FROM expenses WHERE substr(date, 1, 7) = ? AND deleted_at IS NULL').get(month)?.total || 0;
             return send(res, 200, {
                 month,
                 amount: b ? b.amount : 0,
@@ -1486,9 +1545,9 @@ async function handleRequest(req, res) {
         const month = query.month;
         let rows;
         if (month) {
-            rows = db.prepare('SELECT * FROM general_incomes WHERE substr(date, 1, 7) = ? ORDER BY date DESC, created_at DESC').all(month);
+            rows = db.prepare('SELECT * FROM general_incomes WHERE substr(date, 1, 7) = ? AND deleted_at IS NULL ORDER BY date DESC, created_at DESC').all(month);
         } else {
-            rows = db.prepare('SELECT * FROM general_incomes ORDER BY date DESC, created_at DESC LIMIT 100').all();
+            rows = db.prepare('SELECT * FROM general_incomes WHERE deleted_at IS NULL ORDER BY date DESC, created_at DESC LIMIT 100').all();
         }
         return send(res, 200, rows);
     }
@@ -1530,7 +1589,7 @@ async function handleRequest(req, res) {
             } catch (err) {
                 return send(res, 400, { success: false, message: 'Format data JSON tidak valid atau melebihi batas ukuran.' });
             }
-            const exist = db.prepare('SELECT * FROM general_incomes WHERE id = ?').get(id);
+            const exist = db.prepare('SELECT * FROM general_incomes WHERE id = ? AND deleted_at IS NULL').get(id);
             if (!exist) return send(res, 404, { success: false, message: 'Pemasukan tidak ditemukan' });
 
             db.prepare(`
@@ -1551,9 +1610,208 @@ async function handleRequest(req, res) {
         }
 
         if (req.method === 'DELETE') {
-            db.prepare('DELETE FROM general_incomes WHERE id = ?').run(id);
-            return send(res, 200, { success: true, message: 'Pemasukan berhasil dihapus' });
+            const now = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+            const resRun = db.prepare('UPDATE general_incomes SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL').run(now, id);
+            if (resRun.changes === 0) {
+                return send(res, 404, { success: false, message: 'Pemasukan tidak ditemukan' });
+            }
+            return send(res, 200, { success: true, message: 'Pemasukan berhasil dipindahkan ke Tempat Sampah' });
         }
+    }
+
+    // 14. Trash Management API (Tempat Sampah, Restore & Purge)
+    if (req.method === 'GET' && pathname === '/api/trash') {
+        try {
+            const rooms = db.prepare('SELECT * FROM rooms WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC').all();
+            const invoices = db.prepare(`
+                SELECT i.*, r.number as room_number, r.tenant_name
+                FROM invoices i
+                LEFT JOIN rooms r ON i.room_id = r.id
+                WHERE i.deleted_at IS NOT NULL
+                ORDER BY i.deleted_at DESC
+            `).all();
+            const expenses = db.prepare('SELECT * FROM expenses WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC').all();
+            const incomes = db.prepare('SELECT * FROM general_incomes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC').all();
+            const complaints = db.prepare(`
+                SELECT c.*, r.number as room_number
+                FROM complaints c
+                LEFT JOIN rooms r ON c.room_id = r.id
+                WHERE c.deleted_at IS NOT NULL
+                ORDER BY c.deleted_at DESC
+            `).all();
+            const payments = db.prepare(`
+                SELECT p.*, i.month_year, r.number as room_number
+                FROM invoice_payments p
+                LEFT JOIN invoices i ON p.invoice_id = i.id
+                LEFT JOIN rooms r ON i.room_id = r.id
+                WHERE p.deleted_at IS NOT NULL
+                ORDER BY p.deleted_at DESC
+            `).all();
+
+            const counts = {
+                rooms: rooms.length,
+                invoices: invoices.length,
+                expenses: expenses.length,
+                incomes: incomes.length,
+                complaints: complaints.length,
+                payments: payments.length
+            };
+            const totalCount = Object.values(counts).reduce((a, b) => a + b, 0);
+
+            return send(res, 200, {
+                success: true,
+                data: { rooms, invoices, expenses, incomes, complaints, payments },
+                counts,
+                totalCount
+            });
+        } catch (err) {
+            return send(res, 500, { success: false, message: 'Gagal memuat tempat sampah: ' + err.message });
+        }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/trash/restore') {
+        readBody(req, res, (body) => {
+            try {
+                const { type, id } = JSON.parse(body || '{}');
+                const validTypes = ['rooms', 'invoices', 'expenses', 'incomes', 'complaints', 'payments'];
+                if (!validTypes.includes(type) || !id) {
+                    return send(res, 400, { success: false, message: 'Tipe entitas atau ID tidak valid' });
+                }
+
+                db.exec('BEGIN IMMEDIATE;');
+                try {
+                    if (type === 'rooms') {
+                        db.prepare('UPDATE rooms SET deleted_at = NULL WHERE id = ?').run(id);
+                        const invRows = db.prepare('SELECT id FROM invoices WHERE room_id = ?').all(id);
+                        for (const inv of invRows) {
+                            db.prepare('UPDATE invoice_payments SET deleted_at = NULL WHERE invoice_id = ?').run(inv.id);
+                            db.prepare('UPDATE invoices SET deleted_at = NULL WHERE id = ?').run(inv.id);
+                            recalculateInvoiceStatus(inv.id);
+                        }
+                        db.prepare('UPDATE complaints SET deleted_at = NULL WHERE room_id = ?').run(id);
+                    } else if (type === 'invoices') {
+                        const inv = db.prepare('SELECT room_id FROM invoices WHERE id = ?').get(id);
+                        if (inv) {
+                            db.prepare('UPDATE rooms SET deleted_at = NULL WHERE id = ?').run(inv.room_id);
+                        }
+                        db.prepare('UPDATE invoices SET deleted_at = NULL WHERE id = ?').run(id);
+                        db.prepare('UPDATE invoice_payments SET deleted_at = NULL WHERE invoice_id = ?').run(id);
+                        recalculateInvoiceStatus(id);
+                    } else if (type === 'payments') {
+                        const pay = db.prepare('SELECT invoice_id FROM invoice_payments WHERE id = ?').get(id);
+                        db.prepare('UPDATE invoice_payments SET deleted_at = NULL WHERE id = ?').run(id);
+                        if (pay) recalculateInvoiceStatus(pay.invoice_id);
+                    } else if (type === 'expenses') {
+                        db.prepare('UPDATE expenses SET deleted_at = NULL WHERE id = ?').run(id);
+                    } else if (type === 'incomes') {
+                        db.prepare('UPDATE general_incomes SET deleted_at = NULL WHERE id = ?').run(id);
+                    } else if (type === 'complaints') {
+                        db.prepare('UPDATE complaints SET deleted_at = NULL WHERE id = ?').run(id);
+                    }
+                    db.exec('COMMIT;');
+                    return send(res, 200, { success: true, message: 'Data berhasil dipulihkan dari Tempat Sampah' });
+                } catch (e) {
+                    db.exec('ROLLBACK;');
+                    throw e;
+                }
+            } catch (err) {
+                return send(res, 500, { success: false, message: 'Gagal memulihkan data: ' + err.message });
+            }
+        });
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/trash/purge') {
+        readBody(req, res, (body) => {
+            try {
+                const { type, id, purgeAll } = JSON.parse(body || '{}');
+
+                db.exec('BEGIN IMMEDIATE;');
+                try {
+                    if (purgeAll) {
+                        const deletedProofInvoices = db.prepare('SELECT payment_proof FROM invoices WHERE deleted_at IS NOT NULL AND payment_proof IS NOT NULL').all();
+                        const deletedProofPayments = db.prepare('SELECT payment_proof FROM invoice_payments WHERE deleted_at IS NOT NULL AND payment_proof IS NOT NULL').all();
+                        const deletedComplaintPhotos = db.prepare('SELECT photo_url FROM complaints WHERE deleted_at IS NOT NULL AND photo_url IS NOT NULL').all();
+
+                        for (const item of [...deletedProofInvoices, ...deletedProofPayments]) {
+                            if (item.payment_proof) {
+                                const fp = path.join(UPLOAD_DIR, path.basename(item.payment_proof));
+                                if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (_) {} }
+                            }
+                        }
+                        for (const item of deletedComplaintPhotos) {
+                            if (item.photo_url) {
+                                const fp = path.join(UPLOAD_DIR, path.basename(item.photo_url));
+                                if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (_) {} }
+                            }
+                        }
+
+                        db.prepare('DELETE FROM invoice_payments WHERE deleted_at IS NOT NULL').run();
+                        db.prepare('DELETE FROM invoices WHERE deleted_at IS NOT NULL').run();
+                        db.prepare('DELETE FROM expenses WHERE deleted_at IS NOT NULL').run();
+                        db.prepare('DELETE FROM general_incomes WHERE deleted_at IS NOT NULL').run();
+                        db.prepare('DELETE FROM complaints WHERE deleted_at IS NOT NULL').run();
+                        db.prepare('DELETE FROM rooms WHERE deleted_at IS NOT NULL').run();
+
+                        db.exec('COMMIT;');
+                        return send(res, 200, { success: true, message: 'Seluruh tempat sampah berhasil dikosongkan' });
+                    }
+
+                    const validTypes = ['rooms', 'invoices', 'expenses', 'incomes', 'complaints', 'payments'];
+                    if (!validTypes.includes(type) || !id) {
+                        db.exec('ROLLBACK;');
+                        return send(res, 400, { success: false, message: 'Tipe entitas atau ID tidak valid' });
+                    }
+
+                    if (type === 'rooms') {
+                        const invRows = db.prepare('SELECT id FROM invoices WHERE room_id = ?').all(id);
+                        for (const inv of invRows) {
+                            db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(inv.id);
+                            db.prepare('DELETE FROM notification_logs WHERE invoice_id = ?').run(inv.id);
+                        }
+                        db.prepare('DELETE FROM invoices WHERE room_id = ?').run(id);
+                        db.prepare('DELETE FROM complaints WHERE room_id = ?').run(id);
+                        db.prepare('DELETE FROM rooms WHERE id = ? AND deleted_at IS NOT NULL').run(id);
+                    } else if (type === 'invoices') {
+                        const inv = db.prepare('SELECT payment_proof FROM invoices WHERE id = ?').get(id);
+                        if (inv?.payment_proof) {
+                            const fp = path.join(UPLOAD_DIR, path.basename(inv.payment_proof));
+                            if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (_) {} }
+                        }
+                        db.prepare('DELETE FROM invoice_payments WHERE invoice_id = ?').run(id);
+                        db.prepare('DELETE FROM notification_logs WHERE invoice_id = ?').run(id);
+                        db.prepare('DELETE FROM invoices WHERE id = ? AND deleted_at IS NOT NULL').run(id);
+                    } else if (type === 'payments') {
+                        const pay = db.prepare('SELECT payment_proof FROM invoice_payments WHERE id = ?').get(id);
+                        if (pay?.payment_proof) {
+                            const fp = path.join(UPLOAD_DIR, path.basename(pay.payment_proof));
+                            if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (_) {} }
+                        }
+                        db.prepare('DELETE FROM invoice_payments WHERE id = ? AND deleted_at IS NOT NULL').run(id);
+                    } else if (type === 'expenses') {
+                        db.prepare('DELETE FROM expenses WHERE id = ? AND deleted_at IS NOT NULL').run(id);
+                    } else if (type === 'incomes') {
+                        db.prepare('DELETE FROM general_incomes WHERE id = ? AND deleted_at IS NOT NULL').run(id);
+                    } else if (type === 'complaints') {
+                        const cmp = db.prepare('SELECT photo_url FROM complaints WHERE id = ?').get(id);
+                        if (cmp?.photo_url) {
+                            const fp = path.join(UPLOAD_DIR, path.basename(cmp.photo_url));
+                            if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (_) {} }
+                        }
+                        db.prepare('DELETE FROM complaints WHERE id = ? AND deleted_at IS NOT NULL').run(id);
+                    }
+
+                    db.exec('COMMIT;');
+                    return send(res, 200, { success: true, message: 'Data berhasil dihapus permanen' });
+                } catch (e) {
+                    db.exec('ROLLBACK;');
+                    throw e;
+                }
+            } catch (err) {
+                return send(res, 500, { success: false, message: 'Gagal menghapus permanen: ' + err.message });
+            }
+        });
+        return;
     }
 
     return send(res, 404, { message: 'Endpoint Not Found' });

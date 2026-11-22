@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS rooms (
     tenant_email TEXT,
     due_day INTEGER DEFAULT 1,
     entry_date TEXT,
-    created_at TEXT
+    created_at TEXT,
+    deleted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS invoices (
@@ -53,7 +54,8 @@ CREATE TABLE IF NOT EXISTS invoices (
     notified_h0 INTEGER DEFAULT 0,
     notes TEXT,
     access_token TEXT,
-    created_at TEXT
+    created_at TEXT,
+    deleted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS invoice_payments (
@@ -64,7 +66,8 @@ CREATE TABLE IF NOT EXISTS invoice_payments (
     payment_date TEXT NOT NULL,
     payment_proof TEXT,
     notes TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    deleted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
@@ -73,7 +76,8 @@ CREATE TABLE IF NOT EXISTS expenses (
     category TEXT NOT NULL,
     amount INTEGER NOT NULL,
     note TEXT,
-    created_at TEXT
+    created_at TEXT,
+    deleted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS notification_logs (
@@ -97,7 +101,8 @@ CREATE TABLE IF NOT EXISTS complaints (
     status TEXT NOT NULL DEFAULT 'BARU',
     admin_notes TEXT,
     created_at TEXT,
-    resolved_at TEXT
+    resolved_at TEXT,
+    deleted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS budgets (
@@ -111,10 +116,17 @@ CREATE TABLE IF NOT EXISTS general_incomes (
     category TEXT NOT NULL DEFAULT 'Lainnya',
     amount INTEGER NOT NULL CHECK(amount > 0),
     note TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    deleted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS token_denylist (
+    token TEXT PRIMARY KEY,
+    revoked_at TEXT NOT NULL
 );
 
 -- Indeks Kinerja Kueri Produksi
+CREATE INDEX IF NOT EXISTS idx_token_denylist_token ON token_denylist(token);
 CREATE INDEX IF NOT EXISTS idx_invoice_payments_inv ON invoice_payments(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_invoice_payments_date ON invoice_payments(payment_date);
 CREATE INDEX IF NOT EXISTS idx_general_incomes_date ON general_incomes(date);
@@ -126,23 +138,41 @@ CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
 CREATE INDEX IF NOT EXISTS idx_complaints_room_id ON complaints(room_id);
 CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);
+CREATE INDEX IF NOT EXISTS idx_rooms_deleted_at ON rooms(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_invoices_deleted_at ON invoices(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_invoice_payments_deleted_at ON invoice_payments(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_expenses_deleted_at ON expenses(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_general_incomes_deleted_at ON general_incomes(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_complaints_deleted_at ON complaints(deleted_at);
 `);
 
-// Migrasi penambahan access_token pada tabel invoices jika belum ada
+// Migrasi penambahan kolom dan indeks untuk database lama
 try {
     db.exec('ALTER TABLE invoices ADD COLUMN access_token TEXT;');
 } catch (_) {}
 
+const softDeleteTables = ['rooms', 'invoices', 'invoice_payments', 'expenses', 'general_incomes', 'complaints'];
+for (const tbl of softDeleteTables) {
+    try {
+        db.exec(`ALTER TABLE ${tbl} ADD COLUMN deleted_at TEXT;`);
+    } catch (_) {}
+    try {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_${tbl}_deleted_at ON ${tbl}(deleted_at);`);
+    } catch (_) {}
+}
+
 // View terpadu untuk kalkulasi saldo cicilan dan sisa tagihan (Data Access Abstraction)
 db.exec(`
-CREATE VIEW IF NOT EXISTS v_invoice_balances AS
+DROP VIEW IF EXISTS v_invoice_balances;
+CREATE VIEW v_invoice_balances AS
 SELECT 
     i.*,
-    COALESCE(SUM(p.amount), 0) AS paid_amount,
-    MAX(i.amount - COALESCE(SUM(p.amount), 0), 0) AS remaining_amount,
-    COUNT(p.id) AS payment_count
+    COALESCE(SUM(CASE WHEN p.deleted_at IS NULL THEN p.amount ELSE 0 END), 0) AS paid_amount,
+    MAX(i.amount - COALESCE(SUM(CASE WHEN p.deleted_at IS NULL THEN p.amount ELSE 0 END), 0), 0) AS remaining_amount,
+    COUNT(CASE WHEN p.deleted_at IS NULL THEN p.id ELSE NULL END) AS payment_count
 FROM invoices i
 LEFT JOIN invoice_payments p ON p.invoice_id = i.id
+WHERE i.deleted_at IS NULL
 GROUP BY i.id;
 `);
 

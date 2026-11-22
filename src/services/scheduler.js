@@ -1,4 +1,4 @@
-const { db, getSettings } = require('../config/database');
+const { db, getSettings, setSetting } = require('../config/database');
 const { getTodayWIB, getHourWIB, getDueDateDetails, getOverdueDetails, getMonthsList, formatMonthsDisplay } = require('../utils/time');
 const { escapeHtml } = require('../utils/security');
 const { sendUnifiedWhatsApp } = require('./whatsapp');
@@ -180,12 +180,12 @@ async function runReminderCheck(forceOverdue = false) {
 
     const unpaidInvoices = db.prepare(`
         SELECT i.*,
-               COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0) as paid_amount,
-               MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id), 0), 0) as remaining_amount,
+               COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0) as paid_amount,
+               MAX(i.amount - COALESCE((SELECT SUM(amount) FROM invoice_payments WHERE invoice_id = i.id AND deleted_at IS NULL), 0), 0) as remaining_amount,
                r.number as room_number, r.tenant_name, r.tenant_phone, r.tenant_email
         FROM invoices i
         JOIN rooms r ON i.room_id = r.id
-        WHERE i.status IN ('BELUM_BAYAR', 'SEBAGIAN')
+        WHERE i.status IN ('BELUM_BAYAR', 'SEBAGIAN') AND i.deleted_at IS NULL AND r.deleted_at IS NULL
     `).all();
 
     const results = [];
@@ -270,26 +270,32 @@ function startBackgroundSchedulers() {
         runReminderCheck().catch(err => console.error('[Scheduler] Error auto-scheduler:', err.message));
 
         const hour = getHourWIB();
-        // Pencadangan database otomatis setiap hari pada pukul 02:00 WIB
-        if (hour === 2) {
+        const today = getTodayWIB();
+        const currentYm = today.slice(0, 7);
+        const settings = getSettings();
+
+        // Pencadangan database otomatis setiap hari pada atau setelah pukul 02:00 WIB
+        if (hour >= 2 && settings.last_backup_date !== today) {
             try {
                 createDatabaseBackup();
+                setSetting('last_backup_date', today);
             } catch (err) {
                 console.error('[Auto-Backup] Gagal mencadangkan database:', err.message);
             }
         }
 
-        const today = getTodayWIB();
-        if (today.endsWith('-01')) {
-            if (hour === 8) {
-                try {
-                    const res = generateMonthlyInvoices();
+        // Penerbitan tagihan bulanan otomatis pada tanggal 1 pada atau setelah pukul 08:00 WIB
+        if (today.endsWith('-01') && hour >= 8 && settings.last_billing_period !== currentYm) {
+            try {
+                const res = generateMonthlyInvoices();
+                if (res.success) {
+                    setSetting('last_billing_period', currentYm);
                     if (res.count > 0) {
                         console.log(`[Auto-Billing] Berhasil menerbitkan ${res.count} tagihan baru.`);
                     }
-                } catch (err) {
-                    console.error('[Auto-Billing] Gagal:', err.message);
                 }
+            } catch (err) {
+                console.error('[Auto-Billing] Gagal:', err.message);
             }
         }
     }, 60 * 60 * 1000);

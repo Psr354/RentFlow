@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { getSettings, setSetting } = require('../config/database');
+const { db, getSettings, setSetting } = require('../config/database');
 const { UPLOAD_DIR, MAX_BODY, APP_USER } = require('../config/env');
 
 function escapeHtml(str) {
@@ -87,6 +87,7 @@ function createAuthToken(username, scope = 'admin', expiresInMs = (14 * 24 * 60 
     const payload = JSON.stringify({
         u: username,
         scope: scope,
+        jti: crypto.randomBytes(16).toString('hex'),
         exp: Date.now() + expiresInMs
     });
     const b64 = Buffer.from(payload).toString('base64url');
@@ -105,6 +106,29 @@ tokens.set = function(key, value) {
     }
     return rawMapSet(key, value);
 };
+
+function revokeToken(token) {
+    if (!token || typeof token !== 'string') return;
+    try {
+        tokens.delete(token);
+        if (db && typeof db.prepare === 'function') {
+            db.prepare('INSERT OR IGNORE INTO token_denylist (token, revoked_at) VALUES (?, ?)').run(token, new Date().toISOString());
+        }
+    } catch (_) {}
+}
+
+function isTokenRevoked(token) {
+    if (!token || typeof token !== 'string') return true;
+    try {
+        if (db && typeof db.prepare === 'function') {
+            const row = db.prepare('SELECT 1 FROM token_denylist WHERE token = ?').get(token);
+            return !!row;
+        }
+        return false;
+    } catch (_) {
+        return false;
+    }
+}
 
 function isAuthed(req, requiredScope = 'admin') {
     const authHeader = req.headers?.authorization;
@@ -127,6 +151,7 @@ function isAuthed(req, requiredScope = 'admin') {
         }
     }
     if (!token) return false;
+    if (isTokenRevoked(token)) return false;
 
     // 1. Cek HMAC Token Persisten
     if (token.includes('.')) {
@@ -234,7 +259,7 @@ function send(res, status, obj) {
 }
 
 function readBody(req, res, cb) {
-    let body = '';
+    const chunks = [];
     let size = 0;
     req.on('data', chunk => {
         size += chunk.length;
@@ -242,15 +267,15 @@ function readBody(req, res, cb) {
             req.destroy();
             return send(res, 413, { success: false, message: 'Payload terlalu besar (Maks 15MB)' });
         }
-        body += chunk.toString();
+        chunks.push(chunk);
     });
-    req.on('end', () => cb(body));
+    req.on('end', () => cb(Buffer.concat(chunks).toString('utf8')));
     req.on('error', () => send(res, 400, { success: false, message: 'Bad Request' }));
 }
 
 function parseJsonBody(req, maxBytes = MAX_BODY) {
     return new Promise((resolve, reject) => {
-        let raw = '';
+        const chunks = [];
         let size = 0;
         req.on('data', chunk => {
             size += chunk.length;
@@ -258,10 +283,11 @@ function parseJsonBody(req, maxBytes = MAX_BODY) {
                 req.destroy();
                 return reject(new Error('PAYLOAD_TOO_LARGE'));
             }
-            raw += chunk.toString();
+            chunks.push(chunk);
         });
         req.on('end', () => {
             try {
+                const raw = Buffer.concat(chunks).toString('utf8');
                 const parsed = raw ? JSON.parse(raw) : {};
                 resolve(parsed);
             } catch (_) {
@@ -277,14 +303,16 @@ function serveStaticFile(res, filePath, contentType) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end('File Not Found');
     }
-    fs.readFile(filePath, (err, data) => {
-        if (err) {
+    const isUpload = filePath.includes(path.sep + 'uploads' + path.sep);
+    res.setHeader('Cache-Control', isUpload ? 'public, max-age=86400' : 'no-cache, must-revalidate');
+    res.writeHead(200, { 'Content-Type': contentType });
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    stream.on('error', () => {
+        if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'text/plain' });
-            return res.end('Internal Server Error');
+            res.end('Internal Server Error');
         }
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(data);
     });
 }
 
@@ -304,5 +332,7 @@ module.exports = {
     send,
     readBody,
     parseJsonBody,
-    serveStaticFile
+    serveStaticFile,
+    revokeToken,
+    isTokenRevoked
 };
